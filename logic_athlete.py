@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 from database import db
 
-class patient:
+class athlete:
     def __init__(self, app):
         self.app = app
         self.start_callbacks()
@@ -11,37 +11,45 @@ class patient:
     def create_table(self, ex_type, user_id, age_limit):
         data = db.get_specific_history(user_id, ex_type)
         if not data: return dbc.Alert(f"Sin registros de {ex_type}.", color="light")
-        header = html.Thead(html.Tr([html.Th("Estado"), html.Th("Fecha"), html.Th("Tiempo"), html.Th("FC Max"), html.Th("SpO2 Min")]))
+        
+        # --- AÑADIDO: Columna Altitud en la tabla ---
+        header = html.Thead(html.Tr([html.Th("Estado"), html.Th("Fecha"), html.Th("Altitud"), html.Th("Tiempo"), html.Th("FC Max"), html.Th("SpO2 Min")]))
         rows = []
         for row in data:
-            max_hr, min_spo2 = row[3], row[6]
+            # Índices: 0:fecha, 1:dur, 2:avg_hr, 3:max_hr, 4:min_hr, 5:avg_spo2, 6:min_spo2, 7:altitud_ejercicio
+            max_hr, min_spo2, altitud = row[3], row[6], row[7]
+            
             if min_spo2 < 90: status, row_class = "⚠️ HIPOXIA", "table-info"
             elif max_hr > age_limit: status, row_class = "⚠️ CARDIACO", "table-danger"
             else: status, row_class = "✅ OK", ""
+            
             mins, secs = row[1] // 60, row[1] % 60
             rows.append(html.Tr([
-                html.Td(status, className="fw-bold"), html.Td(row[0]), html.Td(f"{mins}m {secs}s"), html.Td(f"{max_hr} bpm"), html.Td(f"{min_spo2} %"),
+                html.Td(status, className="fw-bold"), 
+                html.Td(row[0]), 
+                html.Td(f"{altitud}m"), # Mostramos la altitud
+                html.Td(f"{mins}m {secs}s"), 
+                html.Td(f"{max_hr} bpm"), 
+                html.Td(f"{min_spo2} %"),
             ], className=row_class))
         return dbc.Table([header, html.Tbody(rows)], hover=True, bordered=True, size="sm")
 
     def start_callbacks(self):
         
-        # --- 1. MODAL INTELIGENTE (SOLO SALTA SI INTENTAS USAR HERRAMIENTAS) ---
+        # 1. MODAL INTELIGENTE (Seguridad)
         @self.app.callback(
             Output("modal-missing-profile", "is_open"),
             Input("url", "pathname"),
             State("user_storage", "data")
         )
         def check_missing_profile(path, session):
-            # Solo chequeamos si intenta entrar en Monitor o Historial
             if path in ["/app/monitor", "/app/history"] and session and session.get("id"):
                 info = db.get_user_info(session.get("id"))
-                # Si falta algún dato vital, saltamos la alerta
                 if info and (not info["age"] or not info["weight"] or not info["height"]): return True
                 if not info: return True
             return False
 
-        # --- 2. HISTORIAL ---
+        # 2. HISTORIAL DEL ATLETA
         @self.app.callback(
             Output("out-quest", "children"),
             Output("table-container", "children"),
@@ -91,17 +99,17 @@ class patient:
             age = user_info["age"] if user_info and user_info["age"] else 0
             limit_hr = (220 - age) if age > 0 else 170
 
-            t_run = self.create_table("run", user_id, limit_hr)
-            t_bike = self.create_table("bike", user_id, limit_hr)
-            t_squat = self.create_table("squat", user_id, limit_hr)
-            tabs_ex = dbc.Tabs([dbc.Tab(t_run, label="Correr"), dbc.Tab(t_bike, label="Bici"), dbc.Tab(t_squat, label="Sentadilla")])
+            # --- CAMBIO: Sustituimos las tablas antiguas por las modalidades de nieve ---
+            t_esqui = self.create_table("esqui", user_id, limit_hr)
+            t_snow = self.create_table("snowboard", user_id, limit_hr)
+            tabs_ex = dbc.Tabs([dbc.Tab(t_esqui, label="⛷️ Esquí Alpino"), dbc.Tab(t_snow, label="🏂 Snowboard")])
             
             fig_ex = go.Figure()
             fig_ex.update_layout(template="plotly_white", xaxis={"visible":False}, yaxis={"visible":False})
 
             return msg, table_diary, fig_d, tabs_ex, fig_ex
 
-        # --- 3. PERFIL ---
+        # 3. PERFIL
         @self.app.callback(
             Output("out-profile", "children"),
             Output("profile-summary", "children"),
