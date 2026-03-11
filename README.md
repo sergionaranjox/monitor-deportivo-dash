@@ -6,4 +6,4 @@ Muestra metricas fisiologicas como frecuencia cardiaca y fatiga.
 - Python + Dash + Plotly
 - BITalino para adquisicion de senales
 ## App en vivo
-Enlace: https://tu-app.onrender.com <- anadiras esto en la Parte 2
+Enlace: https://monitor-deportivo-ko45.onrender.com <- anadiras esto en la Parte 2
