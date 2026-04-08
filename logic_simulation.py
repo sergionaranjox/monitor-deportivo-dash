@@ -27,9 +27,10 @@ class simulation:
             State("clock-interval", "n_intervals"),
             State("user_storage", "data"),
             State("locked-ex-store", "data"), 
+            State("altitud-slider", "value"), # NUEVO: Capturamos la altitud
             prevent_initial_call=True
         )
-        def master_control(n_clicks, ex_input_value, is_running, n_intervals, session, locked_ex):
+        def master_control(n_clicks, ex_input_value, is_running, n_intervals, session, locked_ex, altitud):
             
             ctx = callback_context
             trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
@@ -50,56 +51,69 @@ class simulation:
                     limit_hr = (220 - age) if age > 0 else 170
 
                     if duration_sec > 0:
-                        # Simulamos datos Cardiacos
-                        if exercise_to_save == "run": base_hr = random.randint(140, 160)
-                        elif exercise_to_save == "bike": base_hr = random.randint(120, 140)
-                        else: base_hr = random.randint(100, 125)
+                        # 1. Base cardiaca según la nueva modalidad B2B2C
+                        if exercise_to_save == "esqui": 
+                            base_hr = random.randint(130, 150)
+                        elif exercise_to_save == "snowboard": 
+                            base_hr = random.randint(135, 155)
+                        else: 
+                            base_hr = random.randint(120, 140)
+
+                        # 2. Lógica de Simulación Fisiológica por Altitud
+                        altitud_segura = altitud if altitud else 1000
+                        altitud_factor = (altitud_segura - 1000) / 3000.0  # Factor de estrés de 0.0 a 1.0
+
+                        # A mayor altitud, suben las pulsaciones para compensar (+0 a +30 bpm extra)
+                        base_hr += int(altitud_factor * 30)
 
                         sim_avg_hr = base_hr
                         sim_max_hr = base_hr + random.randint(10, 25)
                         sim_min_hr = base_hr - random.randint(10, 20)
 
-                        # Simulamos datos SpO2
-                        sim_avg_spo2 = random.randint(95, 99)
-                        sim_min_spo2 = sim_avg_spo2 - random.randint(0, 7) 
+                        # A mayor altitud, cae la saturación de oxígeno en sangre
+                        # Base a 1000m: 96-99% | Base a 4000m: 86-89%
+                        spo2_caida = int(altitud_factor * 10)
+                        sim_avg_spo2 = random.randint(96, 99) - spo2_caida
+                        sim_min_spo2 = sim_avg_spo2 - random.randint(1, 4) 
 
-                        if db.save_exercise(user_id, exercise_to_save, duration_sec, sim_avg_hr, sim_max_hr, sim_min_hr, sim_avg_spo2, sim_min_spo2):
+                        # 3. Inserción con el nuevo argumento de altitud al final
+                        if db.save_exercise(user_id, exercise_to_save, duration_sec, sim_avg_hr, sim_max_hr, sim_min_hr, sim_avg_spo2, sim_min_spo2, altitud_segura):
                             mins = duration_sec // 60
                             secs = duration_sec % 60
                             
-                            # Prioridad de Alertas
+                            # Alertas actualizadas al contexto de montaña
                             if sim_min_spo2 < 90:
-                                color = "info"
-                                head = f"⚠️ ALERTA: HIPOXIA ({sim_min_spo2}%)"
-                                rec = "Nivel de oxígeno bajo."
+                                color = "warning"
+                                head = f"⚠️ RIESGO DE HIPOXIA ({sim_min_spo2}%)"
+                                rec = f"Oxigenación crítica a {altitud_segura}m. Se recomienda descender."
                             elif sim_max_hr > limit_hr:
                                 color = "danger"
                                 head = f"⚠️ ALERTA CARDIACA (>{limit_hr} bpm)"
-                                rec = "Frecuencia muy alta."
+                                rec = "Tu esfuerzo cardíaco excedió el límite seguro. Descansa."
                             else:
                                 color = "success"
-                                head = "✅ Ejercicio Guardado"
-                                rec = "Parámetros normales."
+                                head = "✅ Descenso Registrado"
+                                rec = f"Parámetros biométricos normales para {altitud_segura}m."
 
                             msg = dbc.Alert([
                                 html.H5(head, className="alert-heading"),
-                                html.P(f"Actividad: {exercise_to_save.upper()} | Tiempo: {mins}m {secs}s"),
+                                html.P(f"Modalidad: {exercise_to_save.upper()} | Altitud: {altitud_segura}m | Tiempo: {mins}m {secs}s"),
                                 html.Hr(),
-                                html.B(f"❤️ Max: {sim_max_hr} | 🫁 SpO2 Min: {sim_min_spo2}%"),
+                                html.B(f"❤️ Max HR: {sim_max_hr} | 🫁 SpO2 Min: {sim_min_spo2}%"),
                                 html.P(rec, className="mb-0 small")
                             ], color=color, duration=8000)
                         else:
                             msg = dbc.Alert("Error BD", color="danger")
-                    else:
-                        msg = dbc.Alert("Tiempo muy corto", color="warning", duration=3000)
+                else:
+                    msg = dbc.Alert("Tiempo muy corto", color="warning", duration=3000)
 
-                return True, 0, "INICIAR SESIÓN", "success", False, msg, None
+                return True, 0, "INICIAR DESCENSO", "success", False, msg, None
 
             if trigger_id == "btn-start-ex" and not is_running:
-                return False, no_update, "DETENER SESIÓN", "danger", True, "", ex_input_value
+                return False, no_update, "DETENER DESCENSO", "danger", True, "", ex_input_value
 
             if trigger_id == "ex-type" and not is_running:
-                return True, 0, "INICIAR SESIÓN", "success", False, "", None
+                return True, 0, "INICIAR DESCENSO", "success", False, "", None
 
             return no_update, no_update, no_update, no_update, no_update, no_update, no_update
 
