@@ -267,7 +267,25 @@ Estimación por sesión: distribución triangular con `min_hr` (mínimo), `avg_h
 
 ---
 
-## Pendiente / Ideas futuras
+## Pendiente / Ideas futuras (ordenado por importancia)
 
-- Comparación lado a lado de dos sesiones
-- Exportar sesión individual como PDF desde el panel del atleta
+| # | Cambio | Área | Descripción |
+|---|--------|------|-------------|
+| 1 | **Alertas automáticas al fisio** | Fisio | Banner rojo en Vista General para atletas con ACWR > 1.5 + fatiga ≥ 8 simultáneamente, o sin sesión en los últimos 7 días |
+| 2 | **Comparación de dos sesiones** | Atleta | Selecciona dos fechas y compara FC, SpO₂, altitud y metros en columnas paralelas |
+| 3 | **Tendencia de rendimiento** | Atleta | Gráfica de FC media a la misma altitud a lo largo del tiempo — proxy de mejora cardiovascular |
+| 4 | **PDF personal del atleta** | Atleta | El atleta descarga un informe de sus últimas N sesiones desde su historial, sin necesitar al fisio |
+| 5 | **Historial de ACWR** | Atleta | Línea temporal del ratio semana a semana para ver periodos de sobreentrenamiento |
+| 6 | **Objetivos personalizables** | Atleta | El atleta fija su propia meta mensual de metros desde el perfil (ahora está fija en 10.000m) |
+| 7 | **Predictor de aclimatación** | Atleta | Basado en la curva de SpO₂ histórica, estima cuántas sesiones más necesita para aclimatarse a una altitud objetivo |
+| 8 | **Recordatorio de diario** | Atleta | Aviso visual en el home si el diario de hoy no está rellenado — sin datos de diario el risk calculator y el ACWR pierden precisión |
+| 9 | **Añadir sesión por el fisio** | Fisio | El entrenador registra una sesión manualmente para cualquier atleta de su lista |
+| 10 | **Filtros en Vista General** | Fisio | Filtrar tabla de atletas por estado (🔴/🟡/🟢), ACWR o días sin actividad |
+| 11 | **Registro de hidratación y nutrición** | Atleta | Dos sliders extra en el diario (litros de agua, calidad dieta 1-10) correlacionables con fatiga y rendimiento |
+| 12 | **Registro de lesiones** | Atleta | Campo en el diario para marcar día de recuperación con zona corporal afectada; aparece en el calendario de actividad en otro color |
+| 13 | **Comparar dos atletas** | Fisio | Panel de comparación directa con las curvas de dos atletas seleccionados en la misma gráfica |
+| 14 | **Historial de notas del fisio** | Fisio | En lugar de sobrescribir la nota, guardar un historial con fecha de cada anotación del entrenador |
+| 15 | **Exportar CSV** | Atleta | Botón en historial del atleta para descargar sus datos en bruto (complementa el Excel global del fisio) |
+| 16 | **Expiración de sesión** | Técnico | `storage_type="session"` en `dcc.Store` para que el login caduque al cerrar el navegador |
+| 17 | **Modo demostración** | Técnico | Opción al registrarse de cargar datos de ejemplo para ver el dashboard lleno antes de tener sesiones reales |
+| 18 | **Soporte multi-idioma** | Técnico | Diccionario de textos ES/EN con toggle en el perfil |
