@@ -75,6 +75,7 @@ class physio:
                 ranking = db.get_ranking()
                 rank_map = {r["id"]: i for i, r in enumerate(ranking)}
 
+                alert_items = []
                 for p in patients_list:
                     pid    = p['value']
                     status = db.get_last_health_status(pid)
@@ -82,6 +83,30 @@ class physio:
                     badge, _ = db.get_badge_info(total)
                     acwr_data = db.get_acwr(pid)
                     acwr      = acwr_data["acwr"]
+
+                    hist      = db.get_history(pid)
+                    last_fatiga = hist[0][1] if hist else None
+                    days_since  = db.get_last_session_days(pid)
+
+                    if acwr is not None and acwr > 1.5 and last_fatiga is not None and last_fatiga >= 8:
+                        alert_items.append(
+                            dbc.Alert([
+                                html.Span("🚨 ", style={"fontSize": "1.1rem"}),
+                                html.Strong(f"{p['label']}"),
+                                f" — ACWR crítico ({acwr}) con fatiga alta ({last_fatiga}/10). "
+                                "Riesgo de lesión elevado. Reducir carga inmediatamente.",
+                            ], color="danger", className="mb-2 py-2 small")
+                        )
+                    if days_since is None or days_since >= 7:
+                        days_txt = f"hace {days_since} días" if days_since is not None else "nunca"
+                        alert_items.append(
+                            dbc.Alert([
+                                html.Span("⚠️ ", style={"fontSize": "1.1rem"}),
+                                html.Strong(f"{p['label']}"),
+                                f" — Sin sesión en los últimos 7 días (última: {days_txt}). "
+                                "Posible abandono o lesión.",
+                            ], color="warning", className="mb-2 py-2 small")
+                        )
 
                     if status == "danger":
                         semaforo, dd_label = "🔴", f"🔴 {p['label']} (RIESGO)"
@@ -124,6 +149,8 @@ class physio:
                         html.Td(f"{total:,} m", className="text-end fw-bold"),
                     ], className=row_class))
 
+                alerts_section = html.Div(alert_items) if alert_items else html.Div()
+
                 if overview_rows:
                     header = html.Thead(html.Tr([
                         html.Th("#", className="text-center"),
@@ -133,13 +160,14 @@ class physio:
                         html.Th("Insignia"),
                         html.Th("Metros", className="text-end"),
                     ]))
-                    overview = dbc.Table(
+                    overview_table = dbc.Table(
                         [header, html.Tbody(overview_rows)],
                         hover=True, bordered=False, striped=True, size="sm", className="mb-0"
                     )
                 else:
-                    overview = dbc.Alert("No hay atletas registrados aún.", color="light")
+                    overview_table = dbc.Alert("No hay atletas registrados aún.", color="light")
 
+                overview = html.Div([alerts_section, overview_table])
                 return updated_list, False, overview
 
             return no_update, True, no_update

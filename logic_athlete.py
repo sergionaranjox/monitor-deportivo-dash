@@ -1,9 +1,10 @@
-from dash import Input, Output, State, html, callback_context, no_update
+from dash import Input, Output, State, html, dcc, callback_context, no_update
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from database import db, BADGES
 from physiological_model import get_spo2_range
+from logic_pdf import pdf_generator
 
 class athlete:
     def __init__(self, app):
@@ -768,7 +769,229 @@ class athlete:
                                  color="success", duration=5000), n
             return dbc.Alert("Error al guardar la sesión", color="danger"), no_update
 
-        # 8. RANKING
+        # 8. PDF DEL ATLETA
+        @self.app.callback(
+            Output("download-athlete-pdf", "data"),
+            Input("btn-download-athlete-pdf", "n_clicks"),
+            State("user_storage", "data"),
+            prevent_initial_call=True,
+        )
+        def download_athlete_pdf(n_clicks, session):
+            if not session or not session.get("id"):
+                return no_update
+            user_id   = session.get("id")
+            user_info = db.get_user_info(user_id)
+            name      = user_info["name"] if user_info else f"Atleta_{user_id}"
+            date_str  = datetime.now().strftime("%Y-%m-%d")
+            pdf_bytes = pdf_generator.create_report(user_id)
+            return dcc.send_bytes(pdf_bytes, filename=f"MiInforme_{name}_{date_str}.pdf")
+
+        # 9. TENDENCIA DE RENDIMIENTO
+        @self.app.callback(
+            Output("tendency-chart", "figure"),
+            Input("url", "pathname"),
+            Input("manual-refresh-trigger", "data"),
+            State("user_storage", "data"),
+        )
+        def update_tendency_chart(pathname, _r, session):
+            if pathname != "/app/history":
+                return no_update
+            fig = go.Figure()
+            empty = dict(template="plotly_white", height=280,
+                         margin=dict(l=40, r=20, t=10, b=40),
+                         xaxis={"visible": False}, yaxis={"visible": False})
+            if not session or not session.get("id"):
+                fig.update_layout(**empty)
+                return fig
+            ex_hist = db.get_exercise_history(session.get("id"))
+            if not ex_hist:
+                fig.update_layout(**empty, annotations=[{
+                    "text": "Sin sesiones registradas", "showarrow": False,
+                    "font": {"color": "gray"}}])
+                return fig
+
+            ex_rev = ex_hist[::-1]
+            bands = {
+                "< 1500m":    {"range": (0,    1499), "color": "#94a3b8"},
+                "1500–2000m": {"range": (1500, 1999), "color": "#22c55e"},
+                "2000–2500m": {"range": (2000, 2499), "color": "#0ea5e9"},
+                "2500–3000m": {"range": (2500, 2999), "color": "#f59e0b"},
+                "> 3000m":    {"range": (3000, 9999), "color": "#ef4444"},
+            }
+            any_trace = False
+            for band_name, bd in bands.items():
+                lo, hi = bd["range"]
+                pts = [(x[0][:10], x[3]) for x in ex_rev if lo <= x[8] <= hi]
+                if len(pts) < 2:
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=[p[0] for p in pts], y=[p[1] for p in pts],
+                    mode="lines+markers", name=band_name,
+                    line=dict(color=bd["color"], width=2),
+                    marker=dict(size=8),
+                ))
+                any_trace = True
+
+            if not any_trace:
+                fig.update_layout(**empty, annotations=[{
+                    "text": "Se necesitan al menos 2 sesiones en la misma banda de altitud",
+                    "showarrow": False, "font": {"color": "gray"}}])
+                return fig
+
+            fig.update_layout(
+                template="plotly_white", height=280,
+                margin=dict(l=50, r=20, t=10, b=40),
+                yaxis=dict(title="FC Media (bpm)"),
+                xaxis=dict(title="Fecha"),
+                legend=dict(orientation="h", y=1.15, font=dict(size=10)),
+            )
+            return fig
+
+        # 10. HISTORIAL DE ACWR SEMANAL
+        @self.app.callback(
+            Output("acwr-history-chart", "figure"),
+            Input("url", "pathname"),
+            Input("manual-refresh-trigger", "data"),
+            State("user_storage", "data"),
+        )
+        def update_acwr_history(pathname, _r, session):
+            if pathname != "/app/history":
+                return no_update
+            fig = go.Figure()
+            empty = dict(template="plotly_white", height=320,
+                         margin=dict(l=50, r=20, t=20, b=40),
+                         xaxis={"visible": False}, yaxis={"visible": False})
+            if not session or not session.get("id"):
+                fig.update_layout(**empty)
+                return fig
+
+            history = db.get_acwr_history(session.get("id"))
+            weeks_x = [h["week"] for h in history]
+            acwrs_y = [h["acwr"] for h in history]
+
+            if not any(a is not None for a in acwrs_y):
+                fig.update_layout(**empty, annotations=[{
+                    "text": "Sin datos suficientes (se necesitan sesiones en las últimas 12 semanas)",
+                    "showarrow": False, "font": {"color": "gray"}}])
+                return fig
+
+            marker_colors = []
+            for a in acwrs_y:
+                if a is None:        marker_colors.append("gray")
+                elif a > 1.5:        marker_colors.append("#ef4444")
+                elif a > 1.3:        marker_colors.append("#f59e0b")
+                elif a >= 0.8:       marker_colors.append("#22c55e")
+                else:                marker_colors.append("#0ea5e9")
+
+            fig.add_trace(go.Scatter(
+                x=weeks_x, y=acwrs_y,
+                mode="lines+markers",
+                line=dict(color="#38bdf8", width=2),
+                marker=dict(size=11, color=marker_colors,
+                            line=dict(width=1.5, color="white")),
+                name="ACWR semanal",
+                connectgaps=False,
+            ))
+
+            fig.add_hrect(y0=0.8, y1=1.3,
+                          fillcolor="rgba(34,197,94,0.08)", line_width=0,
+                          annotation_text="Zona óptima",
+                          annotation_position="top left",
+                          annotation_font_size=10,
+                          annotation_font_color="#22c55e")
+            fig.add_hline(y=1.5, line=dict(color="#ef4444", dash="dash", width=1.2))
+            fig.add_hline(y=0.8, line=dict(color="#0ea5e9", dash="dash", width=1.2))
+
+            fig.update_layout(
+                template="plotly_white", height=320,
+                margin=dict(l=50, r=20, t=30, b=40),
+                yaxis=dict(title="ACWR", range=[0, max(2.0, max((a for a in acwrs_y if a is not None), default=2.0))]),
+                xaxis=dict(title="Semana"),
+                legend=dict(orientation="h", y=1.1),
+            )
+            return fig
+
+        # 11. POBLAR DROPDOWNS DE COMPARACIÓN
+        @self.app.callback(
+            Output("compare-sel-1", "options"),
+            Output("compare-sel-2", "options"),
+            Input("url", "pathname"),
+            Input("manual-refresh-trigger", "data"),
+            State("user_storage", "data"),
+        )
+        def populate_compare_dropdowns(pathname, _r, session):
+            if pathname != "/app/history":
+                return no_update, no_update
+            if not session or not session.get("id"):
+                return [], []
+            ex_hist = db.get_exercise_history(session.get("id"))
+            opts = []
+            for i, row in enumerate(ex_hist):
+                mod   = "⛷️" if row[1] == "esqui" else "🏂"
+                label = f"{mod} {row[0][:10]} · {row[8]}m · FC máx {row[4]} bpm"
+                opts.append({"label": label, "value": i})
+            return opts, opts
+
+        # 12. COMPARACIÓN DE SESIONES
+        @self.app.callback(
+            Output("compare-result", "children"),
+            Input("compare-sel-1", "value"),
+            Input("compare-sel-2", "value"),
+            State("user_storage", "data"),
+            prevent_initial_call=True,
+        )
+        def update_session_comparison(idx1, idx2, session):
+            if idx1 is None or idx2 is None:
+                return dbc.Alert("Selecciona las dos sesiones para ver la comparación.", color="info")
+            if not session or not session.get("id"):
+                return ""
+            ex_hist = db.get_exercise_history(session.get("id"))
+            if idx1 >= len(ex_hist) or idx2 >= len(ex_hist):
+                return dbc.Alert("Error: sesión no encontrada.", color="warning")
+
+            s1, s2 = ex_hist[idx1], ex_hist[idx2]
+
+            def session_card(s, label):
+                mod       = "⛷️ Esquí Alpino" if s[1] == "esqui" else "🏂 Snowboard"
+                mins, sec = s[2] // 60, s[2] % 60
+                return dbc.Card([
+                    dbc.CardHeader(label, className="fw-bold small"),
+                    dbc.CardBody([
+                        html.P(f"{mod}", className="fw-bold mb-1"),
+                        html.P(f"📅 {s[0][:10]}", className="small mb-1"),
+                        html.P(f"⛰️ {s[8]} m altitud", className="small mb-1"),
+                        html.P(f"⏱️ {mins}m {sec}s", className="small mb-2"),
+                        html.Hr(className="my-2"),
+                        html.P(f"❤️ FC Media: {s[3]} bpm", className="small mb-1"),
+                        html.P(f"❤️ FC Máx: {s[4]} bpm", className="small fw-bold mb-1"),
+                        html.P(f"❤️ FC Mín: {s[5]} bpm", className="small mb-2"),
+                        html.P(f"🫁 SpO₂ Media: {s[6]} %", className="small mb-1"),
+                        html.P(f"🫁 SpO₂ Mín: {s[7]} %", className="small fw-bold mb-0"),
+                    ], className="py-2"),
+                ], className="h-100 border-0 shadow-sm")
+
+            metrics = ["FC Media", "FC Máx", "SpO₂ Med", "SpO₂ Mín"]
+            vals1   = [s1[3], s1[4], s1[6], s1[7]]
+            vals2   = [s2[3], s2[4], s2[6], s2[7]]
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name=f"A · {s1[0][:10]}", x=metrics, y=vals1,
+                                 marker_color="#0ea5e9"))
+            fig.add_trace(go.Bar(name=f"B · {s2[0][:10]}", x=metrics, y=vals2,
+                                 marker_color="#f97316"))
+            fig.update_layout(
+                barmode="group", template="plotly_white", height=260,
+                margin=dict(l=20, r=20, t=10, b=20),
+                legend=dict(orientation="h", y=1.1, font=dict(size=10)),
+            )
+            return html.Div([
+                dbc.Row([
+                    dbc.Col(session_card(s1, "Sesión A"), width=6),
+                    dbc.Col(session_card(s2, "Sesión B"), width=6),
+                ], className="mb-3 g-2"),
+                dcc.Graph(figure=fig, config={"staticPlot": True}),
+            ])
+
+        # 13. RANKING
         @self.app.callback(
             Output("ranking-my-badge", "children"),
             Output("ranking-all-badges", "children"),

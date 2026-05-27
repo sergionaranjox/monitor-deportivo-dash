@@ -406,6 +406,43 @@ class db:
         return row[0] if row and row[0] else ""
 
     @classmethod
+    def get_last_session_days(cls, user_id):
+        from datetime import date
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("SELECT date(created_at, 'localtime') FROM sesiones_nieve WHERE user_id=? ORDER BY created_at DESC LIMIT 1", (user_id,))
+        row = c.fetchone()
+        conn.close()
+        if not row:
+            return None
+        last_date = date.fromisoformat(row[0])
+        return (date.today() - last_date).days
+
+    @classmethod
+    def get_acwr_history(cls, user_id, weeks=12):
+        from datetime import date, timedelta
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT date(created_at, 'localtime') as d, SUM(metros_descenso) as m
+            FROM sesiones_nieve WHERE user_id=?
+            GROUP BY date(created_at, 'localtime')
+        """, (user_id,))
+        rows = c.fetchall()
+        conn.close()
+        daily = {r[0]: (r[1] or 0) for r in rows}
+        today = date.today()
+        result = []
+        for w in range(weeks - 1, -1, -1):
+            week_end = today - timedelta(days=w * 7)
+            acute = sum(daily.get((week_end - timedelta(days=d)).isoformat(), 0) for d in range(7))
+            chronic_total = sum(daily.get((week_end - timedelta(days=d)).isoformat(), 0) for d in range(28))
+            chronic_weekly = chronic_total / 4
+            acwr = round(acute / chronic_weekly, 2) if chronic_weekly > 0 else None
+            result.append({"week": week_end.isoformat(), "acwr": acwr, "acute": acute})
+        return result
+
+    @classmethod
     def get_all_patients(cls):
         conn = sqlite3.connect(cls.PATH)
         c = conn.cursor()

@@ -266,12 +266,17 @@ layout_patient_monitor = html.Div([
 layout_patient_history = html.Div([
     get_navbar(),
     dcc.Store(id="manual-refresh-trigger", data=0),
+    dcc.Download(id="download-athlete-pdf"),
     dbc.Container([
         dbc.Row(dbc.Col(dbc.Button("← Volver", href="/app", color="link",
                                    className="text-decoration-none mb-3 ps-0",
                                    style={"color": "var(--accent-dark)"}))),
         dbc.Card([
-            dbc.CardHeader("📂 Expediente de Rendimiento", className="fw-bold"),
+            dbc.CardHeader([
+                html.Span("📂 Expediente de Rendimiento"),
+                dbc.Button("📄 Mi Informe PDF", id="btn-download-athlete-pdf",
+                           color="outline-primary", size="sm", className="fw-bold"),
+            ], className="fw-bold d-flex justify-content-between align-items-center"),
             dbc.CardBody([
                 dbc.Tabs([
                     dbc.Tab(label="📝 Diario de Fatiga", children=[
@@ -324,6 +329,14 @@ layout_patient_history = html.Div([
                                 style={"color": "var(--accent-dark)", "fontSize": ".78rem",
                                        "letterSpacing": ".06em"}),
                         dcc.Graph(id="hr-zones-chart", style={"height": "260px"}),
+                        html.Hr(),
+                        html.H6("📈 Tendencia de Rendimiento · FC Media por Altitud",
+                                className="fw-bold text-uppercase mb-2",
+                                style={"color": "var(--accent-dark)", "fontSize": ".78rem",
+                                       "letterSpacing": ".06em"}),
+                        html.P("Si la FC media baja con el tiempo a la misma altitud, tu corazón es más eficiente.",
+                               className="text-muted small mb-2"),
+                        dcc.Graph(id="tendency-chart", style={"height": "280px"}),
                     ]),
 
                     dbc.Tab(label="🫁 Aclimatación", children=[
@@ -340,6 +353,43 @@ layout_patient_history = html.Div([
                                 className="fw-bold text-uppercase mb-3",
                                 style={"color": "var(--accent-dark)", "fontSize": ".78rem", "letterSpacing": ".06em"}),
                         dcc.Graph(id="activity-calendar", style={"height": "220px"}),
+                    ]),
+
+                    dbc.Tab(label="📊 ACWR Semanal", children=[
+                        html.Br(),
+                        html.H6("Historial de Carga de Entrenamiento — últimas 12 semanas",
+                                className="fw-bold text-uppercase mb-1",
+                                style={"color": "var(--accent-dark)", "fontSize": ".78rem",
+                                       "letterSpacing": ".06em"}),
+                        html.P("Los puntos coloreados indican la zona ACWR de cada semana. "
+                               "Zona verde óptima: 0.8 – 1.3.",
+                               className="text-muted small mb-3"),
+                        dcc.Graph(id="acwr-history-chart", style={"height": "320px"}),
+                    ]),
+
+                    dbc.Tab(label="🔀 Comparar Sesiones", children=[
+                        html.Br(),
+                        html.H6("Comparación de Dos Sesiones",
+                                className="fw-bold text-uppercase mb-3",
+                                style={"color": "var(--accent-dark)", "fontSize": ".78rem",
+                                       "letterSpacing": ".06em"}),
+                        dbc.Row([
+                            dbc.Col([
+                                html.Label("Sesión A:"),
+                                dcc.Dropdown(id="compare-sel-1",
+                                             placeholder="Selecciona una sesión...",
+                                             className="mb-3"),
+                            ], width=12, md=6),
+                            dbc.Col([
+                                html.Label("Sesión B:"),
+                                dcc.Dropdown(id="compare-sel-2",
+                                             placeholder="Selecciona otra sesión...",
+                                             className="mb-3"),
+                            ], width=12, md=6),
+                        ]),
+                        html.Div("Selecciona las dos sesiones para ver la comparación detallada.",
+                                 id="compare-result",
+                                 className="text-muted text-center p-4 small"),
                     ]),
 
                     dbc.Tab(label="➕ Añadir Sesión", children=[
@@ -563,7 +613,9 @@ layout_physio = html.Div([
                              className="mt-3 small border-top pt-2",
                              style={"color": "var(--muted)"}),
                 ])
-            ], className="shadow-sm h-100 border-0"), width=12, lg=3, className="mb-3 mb-lg-0"),
+            ], className="shadow-sm h-100 border-0"),
+            width=12, lg=3, className="mb-3 mb-lg-0",
+            style={"position": "relative", "zIndex": 10}),
 
             # ── Panel principal ───────────────────────────────────────
             dbc.Col(dbc.Card([
