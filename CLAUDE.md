@@ -76,6 +76,8 @@ Stack: **Python · Dash · Plotly · SQLite · Bootstrap (dbc)**
 | `get_weekly_summary(user_id)` | `{this_metros, this_sessions, prev_metros, prev_sessions}` — ventanas de 7 días rodantes |
 | `save_athlete_note(user_id, note)` | `True/False` — guarda notas del entrenador |
 | `get_athlete_note(user_id)` | `str` — nota del entrenador |
+| `get_last_session_days(user_id)` | `int` días desde la última sesión, o `None` si no hay sesiones |
+| `get_acwr_history(user_id, weeks=12)` | `[{week, acwr, acute}]` — ACWR semanal de las últimas N semanas |
 
 ### Índices de columnas en consultas (crítico — no equivocarse)
 
@@ -101,14 +103,18 @@ Stack: **Python · Dash · Plotly · SQLite · Bootstrap (dbc)**
 - Interval: `id="clock-interval"` cada 500ms
 
 ### `/app/history` — Historial del atleta
-5 pestañas:
+7 pestañas + botón descarga PDF en el CardHeader:
 1. **📝 Diario de Fatiga** — sliders fatiga/RPE, input sueño, slider altitud pernocta (0-3500m), gráfica evolución, tabla últimas 5 entradas
-2. **🏔️ Historial de Nieve** — tabs por modalidad (esquí/snowboard), gráfica dual-eje FC+SpO₂, `id="hr-zones-chart"` (barras apiladas Z1-Z5 últimas 10 sesiones)
+2. **🏔️ Historial de Nieve** — tabs por modalidad (esquí/snowboard), gráfica dual-eje FC+SpO₂, `id="hr-zones-chart"` (barras apiladas Z1-Z5 últimas 10 sesiones), `id="tendency-chart"` (FC media por banda de altitud a lo largo del tiempo)
 3. **🫁 Aclimatación** — SpO₂ mín por sesión vs altitud, línea umbral 90%
 4. **📅 Actividad** — heatmap calendario 90 días estilo GitHub
-5. **➕ Añadir Sesión** — formulario registro manual (fecha, modalidad, altitud, duración, metros, FC avg/max, SpO₂ avg/min)
+5. **📊 ACWR Semanal** — `id="acwr-history-chart"` línea temporal 12 semanas con marcadores coloreados por zona, banda sombreada 0.8-1.3
+6. **🔀 Comparar Sesiones** — dos `dcc.Dropdown` (`id="compare-sel-1"`, `id="compare-sel-2"`) + `id="compare-result"` con tarjetas paralelas y gráfico de barras agrupadas
+7. **➕ Añadir Sesión** — formulario registro manual (fecha, modalidad, altitud, duración, metros, FC avg/max, SpO₂ avg/min)
 
-Store: `dcc.Store(id="manual-refresh-trigger")` — al guardar sesión manual, se incrementa y dispara refresco del historial.
+Stores: `dcc.Store(id="manual-refresh-trigger")` — al guardar sesión manual, se incrementa y dispara refresco del historial. `dcc.Download(id="download-athlete-pdf")` — descarga informe PDF propio del atleta.
+
+Botón `id="btn-download-athlete-pdf"` en el CardHeader del historial.
 
 ### `/app/profile` — Perfil del atleta
 - Formulario datos físicos (edad, peso, altura)
@@ -122,8 +128,9 @@ Store: `dcc.Store(id="manual-refresh-trigger")` — al guardar sesión manual, s
 
 ### `/fisio` — Panel del entrenador
 Navbar propio (verde-teal) con botones PDF / Excel / Salir.
-Selector de atleta (Dropdown) a la izquierda. Panel principal con 5 pestañas:
-1. **👥 Vista General** — tabla todos los atletas: posición, nombre, semáforo, ACWR (badge colorizado), insignia, metros
+Selector de atleta (Dropdown) a la izquierda — columna con `style={"position":"relative","zIndex":10}` para que el desplegable no quede tapado por la tarjeta derecha.
+Panel principal con 5 pestañas:
+1. **👥 Vista General** — banners de alerta automáticos encima de la tabla (🚨 ACWR>1.5 + fatiga≥8 / ⚠️ sin sesión en 7+ días), luego tabla todos los atletas: posición, nombre, semáforo, ACWR (badge colorizado), insignia, metros
 2. **📋 Diario y Fatiga** — gráfica fatiga+RPE, tabla últimas entradas
 3. **🏔️ Rendimiento en Pista** — gráfica FC Max+Media+SpO₂, tabla descensos por modalidad, **notas del entrenador** (textarea + guardar)
 4. **🔬 Data Science** — scatter fatiga vs FC Max por tipo de ejercicio
@@ -166,9 +173,10 @@ Selector de atleta (Dropdown) a la izquierda. Panel principal con 5 pestañas:
 
 ### CSS / UI
 
-- Variables CSS: `--bg, --card, --snow, --muted, --text, --accent, --accent-dark, --pine-dark`
-- Tema: gradiente azul-acero en el body, tarjetas con fondo `var(--snow)`, navbar atleta azul oscuro (`snow-navbar`), navbar fisio verde-teal (`physio-navbar`)
-- Animaciones existentes: `page-enter` (fade-in), `spotlight-pulse` (glow azul), `bounce-arrow`, `fadeInUp`
+- Variables CSS: `--bg, --card, --snow, --muted, --text, --accent, --accent-dark, --pine-dark, --glass-bg, --glass-border`
+- Tema (v2 Light): body degradado azul-nieve muy suave (`#c0ddf0 → #f2f9fd`), tarjetas **blanco puro** (`#ffffff`) sin glassmorphism para máxima legibilidad, navbar atleta azul oscuro (`snow-navbar`), navbar fisio verde-teal (`physio-navbar`)
+- Animaciones: `page-enter` (fadeInUp), `spotlight-pulse` (glow azul), `bounce-arrow`, `fadeInUp`, `shimmer` (brillo en progress bars)
+- `.Select-menu-outer { z-index: 1055 }` — evita que el dropdown quede tapado por tarjetas adyacentes
 - Bootstrap breakpoints: `width=12, sm=X, lg=Y` — siempre mobile-first
 
 ### Seguridad
@@ -267,25 +275,38 @@ Estimación por sesión: distribución triangular con `min_hr` (mínimo), `avg_h
 
 ---
 
+### [Sesión 7] 5 nuevas features + rediseño visual + fix fisio dropdown
+
+**Alertas automáticas al fisio** (`logic_physio.py` → `load_list`): banners 🚨/⚠️ encima de la tabla en Vista General. Lógica: ACWR > 1.5 AND fatiga ≥ 8 → danger; sin sesión en ≥ 7 días → warning. Usa `db.get_last_session_days()` y `db.get_history()`.
+
+**Comparación de dos sesiones** (pestaña "🔀 Comparar" en `/app/history`): dos `dcc.Dropdown` con todas las sesiones del atleta; callback `populate_compare_dropdowns` las puebla al cargar; `update_session_comparison` muestra tarjetas paralelas + gráfico de barras agrupadas (`prevent_initial_call=True`).
+
+**Tendencia de rendimiento** (`id="tendency-chart"` en pestaña "🏔️ Historial de Nieve"): scatter/line de FC media por fecha agrupado en 5 bandas de altitud (< 1500m, 1500–2000m, 2000–2500m, 2500–3000m, > 3000m). Solo muestra bandas con ≥ 2 sesiones.
+
+**PDF personal del atleta**: botón `id="btn-download-athlete-pdf"` en CardHeader del historial → `dcc.Download(id="download-athlete-pdf")` → reutiliza `pdf_generator.create_report(user_id)`. Import de `logic_pdf` añadido a `logic_athlete.py`.
+
+**Historial de ACWR semanal** (pestaña "📊 ACWR Semanal"): `db.get_acwr_history(user_id, weeks=12)` calcula en Python iterando sobre datos diarios. Gráfica `id="acwr-history-chart"` con marcadores coloreados por zona + `add_hrect` zona óptima + líneas de referencia 0.8 y 1.5.
+
+**Rediseño visual CSS** (tema Light v2): body degradado azul-nieve suave (`#c0ddf0 → #f2f9fd`), tarjetas blanco puro sin glassmorphism, progress bars con degradado + animación shimmer, tablas con cabeceras azul oscuro, botones con sombra coordinada.
+
+**Fix dropdown fisio**: `dbc.Col` izquierdo con `style={"position":"relative","zIndex":10}` + `.Select-menu-outer { z-index: 1055 }` en CSS — el menú ya no queda tapado por la tarjeta derecha.
+
+---
+
 ## Pendiente / Ideas futuras (ordenado por importancia)
 
 | # | Cambio | Área | Descripción |
 |---|--------|------|-------------|
-| 1 | **Alertas automáticas al fisio** | Fisio | Banner rojo en Vista General para atletas con ACWR > 1.5 + fatiga ≥ 8 simultáneamente, o sin sesión en los últimos 7 días |
-| 2 | **Comparación de dos sesiones** | Atleta | Selecciona dos fechas y compara FC, SpO₂, altitud y metros en columnas paralelas |
-| 3 | **Tendencia de rendimiento** | Atleta | Gráfica de FC media a la misma altitud a lo largo del tiempo — proxy de mejora cardiovascular |
-| 4 | **PDF personal del atleta** | Atleta | El atleta descarga un informe de sus últimas N sesiones desde su historial, sin necesitar al fisio |
-| 5 | **Historial de ACWR** | Atleta | Línea temporal del ratio semana a semana para ver periodos de sobreentrenamiento |
-| 6 | **Objetivos personalizables** | Atleta | El atleta fija su propia meta mensual de metros desde el perfil (ahora está fija en 10.000m) |
-| 7 | **Predictor de aclimatación** | Atleta | Basado en la curva de SpO₂ histórica, estima cuántas sesiones más necesita para aclimatarse a una altitud objetivo |
-| 8 | **Recordatorio de diario** | Atleta | Aviso visual en el home si el diario de hoy no está rellenado — sin datos de diario el risk calculator y el ACWR pierden precisión |
-| 9 | **Añadir sesión por el fisio** | Fisio | El entrenador registra una sesión manualmente para cualquier atleta de su lista |
-| 10 | **Filtros en Vista General** | Fisio | Filtrar tabla de atletas por estado (🔴/🟡/🟢), ACWR o días sin actividad |
-| 11 | **Registro de hidratación y nutrición** | Atleta | Dos sliders extra en el diario (litros de agua, calidad dieta 1-10) correlacionables con fatiga y rendimiento |
-| 12 | **Registro de lesiones** | Atleta | Campo en el diario para marcar día de recuperación con zona corporal afectada; aparece en el calendario de actividad en otro color |
-| 13 | **Comparar dos atletas** | Fisio | Panel de comparación directa con las curvas de dos atletas seleccionados en la misma gráfica |
-| 14 | **Historial de notas del fisio** | Fisio | En lugar de sobrescribir la nota, guardar un historial con fecha de cada anotación del entrenador |
-| 15 | **Exportar CSV** | Atleta | Botón en historial del atleta para descargar sus datos en bruto (complementa el Excel global del fisio) |
-| 16 | **Expiración de sesión** | Técnico | `storage_type="session"` en `dcc.Store` para que el login caduque al cerrar el navegador |
-| 17 | **Modo demostración** | Técnico | Opción al registrarse de cargar datos de ejemplo para ver el dashboard lleno antes de tener sesiones reales |
-| 18 | **Soporte multi-idioma** | Técnico | Diccionario de textos ES/EN con toggle en el perfil |
+| 1 | **Objetivos personalizables** | Atleta | El atleta fija su propia meta mensual de metros desde el perfil (ahora está fija en 10.000m) |
+| 2 | **Predictor de aclimatación** | Atleta | Basado en la curva de SpO₂ histórica, estima cuántas sesiones más necesita para aclimatarse a una altitud objetivo |
+| 3 | **Recordatorio de diario** | Atleta | Aviso visual en el home si el diario de hoy no está rellenado — sin datos de diario el risk calculator y el ACWR pierden precisión |
+| 4 | **Añadir sesión por el fisio** | Fisio | El entrenador registra una sesión manualmente para cualquier atleta de su lista |
+| 5 | **Filtros en Vista General** | Fisio | Filtrar tabla de atletas por estado (🔴/🟡/🟢), ACWR o días sin actividad |
+| 6 | **Registro de hidratación y nutrición** | Atleta | Dos sliders extra en el diario (litros de agua, calidad dieta 1-10) correlacionables con fatiga y rendimiento |
+| 7 | **Registro de lesiones** | Atleta | Campo en el diario para marcar día de recuperación con zona corporal afectada; aparece en el calendario de actividad en otro color |
+| 8 | **Comparar dos atletas** | Fisio | Panel de comparación directa con las curvas de dos atletas seleccionados en la misma gráfica |
+| 9 | **Historial de notas del fisio** | Fisio | En lugar de sobrescribir la nota, guardar un historial con fecha de cada anotación del entrenador |
+| 10 | **Exportar CSV** | Atleta | Botón en historial del atleta para descargar sus datos en bruto (complementa el Excel global del fisio) |
+| 11 | **Expiración de sesión** | Técnico | `storage_type="session"` en `dcc.Store` para que el login caduque al cerrar el navegador |
+| 12 | **Modo demostración** | Técnico | Opción al registrarse de cargar datos de ejemplo para ver el dashboard lleno antes de tener sesiones reales |
+| 13 | **Soporte multi-idioma** | Técnico | Diccionario de textos ES/EN con toggle en el perfil |
