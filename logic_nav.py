@@ -1,6 +1,6 @@
 from dash import Input, Output, State, no_update
-# Importamos TODAS las vistas (incluida profile)
-from layouts import layout_login, layout_register, layout_patient_home, layout_patient_monitor, layout_patient_history, layout_patient_profile, layout_physio
+from layouts import layout_login, layout_register, layout_patient_home, layout_patient_monitor, layout_patient_history, layout_patient_profile, layout_patient_ranking, layout_physio
+from database import db
 
 class router:
     def __init__(self, app):
@@ -36,8 +36,10 @@ class router:
                     return layout_patient_monitor
                 elif path == "/app/history":
                     return layout_patient_history
-                elif path == "/app/profile":  # <--- NUEVA RUTA
+                elif path == "/app/profile":
                     return layout_patient_profile
+                elif path == "/app/ranking":
+                    return layout_patient_ranking
                 else:
                     # Por defecto al menú
                     return layout_patient_home
@@ -52,8 +54,11 @@ class router:
             prevent_initial_call=True
         )
         def redirect(session, path):
-            # Si entras login/registro y ya tienes sesión -> Home
+            # Si entras login/registro y ya tienes sesión
             if session and (path == "/" or path == "/register"):
+                user_id = session.get("id")
+                if user_id and session.get("role") == "paciente" and db.is_first_login(user_id):
+                    return "/app/profile"
                 return "/app"
             
             # Si intentas entrar a /app sin sesión -> Login

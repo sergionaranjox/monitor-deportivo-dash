@@ -1,0 +1,494 @@
+/* ============================================================
+   SNOWTRACK  —  Mountain / Natural Theme
+   ============================================================ */
+
+:root {
+  --bg:          #a8c8de;
+  --bg-deep:     #0c2340;
+  --card:        #eaf3f9;
+  --accent:      #0ea5e9;
+  --accent-dark: #0369a1;
+  --accent-light:#bae6fd;
+  --pine:        #10b981;
+  --pine-dark:   #059669;
+  --snow:        #d6ebf7;
+  --danger:      #ef4444;
+  --warning:     #f59e0b;
+  --text:        #1e3a4f;
+  --muted:       #4a6478;
+  --shadow-sm:   0 1px 3px rgba(14,165,233,.15), 0 1px 2px rgba(14,165,233,.08);
+  --shadow-md:   0 4px 12px rgba(14,165,233,.16), 0 2px 4px rgba(14,165,233,.08);
+  --shadow-lg:   0 12px 30px rgba(14,165,233,.22), 0 4px 8px rgba(14,165,233,.10);
+  --r:           12px;
+  --r-lg:        20px;
+}
+
+/* ── Reset & base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  background: linear-gradient(160deg, #6a9eba 0%, #8fbdd6 45%, #afd0e4 100%);
+  min-height: 100vh;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--text);
+}
+
+/* ── Animations ──────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(14,165,233,.4);  }
+  50%       { box-shadow: 0 0 20px rgba(14,165,233,.8); }
+}
+@keyframes snowfall {
+  0%   { transform: translateY(-10px) rotate(0deg);   opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+}
+
+.page-enter  { animation: fadeInUp .45s ease forwards; }
+.page-fade   { animation: fadeIn   .35s ease forwards; }
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar              { width: 6px; }
+::-webkit-scrollbar-track        { background: #a0c0d8; }
+::-webkit-scrollbar-thumb        { background: var(--accent); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--accent-dark); }
+
+/* ── Navbar (athlete) ────────────────────────────────────── */
+.snow-navbar {
+  background: linear-gradient(135deg, #0c2340 0%, #0369a1 55%, #0ea5e9 100%) !important;
+  box-shadow: 0 4px 20px rgba(14,165,233,.35) !important;
+  padding: .75rem 1.5rem !important;
+}
+.snow-navbar .navbar-brand {
+  font-weight: 800 !important;
+  font-size: 1.3rem !important;
+  letter-spacing: -.4px;
+  color: #fff !important;
+}
+.snow-navbar .nav-link {
+  color: rgba(255,255,255,.85) !important;
+  font-weight: 500 !important;
+  transition: color .2s !important;
+}
+.snow-navbar .nav-link:hover,
+.snow-navbar .nav-link.active { color: #fff !important; }
+
+/* Physio navbar */
+.physio-navbar {
+  background: linear-gradient(135deg, #134e4a 0%, #0f766e 55%, #14b8a6 100%) !important;
+  box-shadow: 0 4px 20px rgba(20,184,166,.3) !important;
+  padding: .75rem 1.5rem !important;
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.card {
+  border: none !important;
+  border-radius: var(--r) !important;
+  box-shadow: var(--shadow-md) !important;
+  transition: transform .22s ease, box-shadow .22s ease !important;
+}
+.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg) !important; }
+
+.card-header {
+  background: linear-gradient(135deg, #d4e9f7, #bcd8ed) !important;
+  border-bottom: 2px solid #90c0da !important;
+  border-radius: var(--r) var(--r) 0 0 !important;
+  font-weight: 700 !important;
+  color: var(--text) !important;
+  letter-spacing: .01em;
+}
+.card-header.dark-header {
+  background: linear-gradient(135deg, #0c2340, #0369a1) !important;
+  border-bottom: none !important;
+  color: #fff !important;
+}
+.card-header.teal-header {
+  background: linear-gradient(135deg, #134e4a, #0f766e) !important;
+  border-bottom: none !important;
+  color: #fff !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em;
+  transition: all .2s ease !important;
+}
+.btn:hover  { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0,0,0,.15) !important; }
+.btn:active { transform: translateY(0);    box-shadow: none !important; }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark)) !important;
+  border: none !important;
+}
+.btn-success {
+  background: linear-gradient(135deg, var(--pine), var(--pine-dark)) !important;
+  border: none !important;
+}
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  border: none !important;
+}
+.btn-dark {
+  background: linear-gradient(135deg, #1e3a4f, #0c2340) !important;
+  border: none !important;
+}
+.btn-outline-primary {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.btn-outline-primary:hover,
+.btn-check:checked + .btn-outline-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark)) !important;
+  color: #fff !important;
+}
+
+/* ── Forms ───────────────────────────────────────────────── */
+.form-control, .form-select {
+  border-radius: 8px !important;
+  border: 1.5px solid #90c0da !important;
+  background: #daeef8 !important;
+  color: var(--text) !important;
+  transition: border-color .2s, box-shadow .2s !important;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(14,165,233,.22) !important;
+  background: #e4f4fb !important;
+}
+.form-label, label {
+  color: var(--text) !important;
+  font-weight: 600 !important;
+  font-size: .875rem !important;
+}
+
+/* ── Tables ──────────────────────────────────────────────── */
+.table { border-radius: var(--r); overflow: hidden; }
+.table thead th {
+  background: linear-gradient(135deg, var(--accent-dark), var(--accent)) !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: 700 !important;
+  font-size: .8rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: .65rem .85rem !important;
+}
+.table tbody tr { transition: background .15s; }
+.table-hover tbody tr:hover { background: #bcd8ed !important; }
+
+/* ── Alerts ──────────────────────────────────────────────── */
+.alert {
+  border-radius: var(--r) !important;
+  border: none !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* ── Progress ────────────────────────────────────────────── */
+.progress {
+  border-radius: 50px !important;
+  background: #a0c8e0 !important;
+  height: 10px !important;
+}
+.progress-bar { border-radius: 50px !important; }
+
+/* ── Tabs ────────────────────────────────────────────────── */
+.nav-tabs { border-bottom: 2px solid #90c0da !important; }
+.nav-tabs .nav-link {
+  border-radius: 10px 10px 0 0 !important;
+  color: var(--muted) !important;
+  font-weight: 600 !important;
+  padding: .55rem 1.1rem !important;
+  transition: background .2s, color .2s !important;
+  border: none !important;
+}
+.nav-tabs .nav-link:hover { background: #bcd8ed !important; color: var(--text) !important; }
+.nav-tabs .nav-link.active {
+  background: var(--snow) !important;
+  color: var(--accent-dark) !important;
+  border-bottom: 3px solid var(--accent) !important;
+}
+
+/* ── Dropdown / Select ───────────────────────────────────── */
+.Select-control, .VirtualizedSelectFocusedOption { border-radius: 8px !important; }
+
+/* ── ListGroup ───────────────────────────────────────────── */
+.list-group-item {
+  border-left: none !important;
+  border-right: none !important;
+  transition: background .15s !important;
+}
+.list-group-item:hover { background: #bcd8ed !important; }
+.list-group-item:first-child { border-top: none !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   LOGIN  —  Mountain panorama background
+   ═══════════════════════════════════════════════════════════ */
+.login-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(to bottom, #0c1f3a 0%, #0a4a7c 40%, #1a7abf 65%, #7dd3fc 85%, #e0f2fe 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Snow particles */
+.snowflake {
+  position: absolute;
+  top: -20px;
+  color: rgba(255,255,255,.7);
+  font-size: 1.2em;
+  animation: snowfall linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Back mountain ridge */
+.login-bg::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 45%;
+  background: linear-gradient(to top, #0c1f3a 40%, #0a4a7c);
+  clip-path: polygon(
+    0% 100%, 0% 55%,
+    5% 42%, 10% 52%, 15% 35%, 22% 48%, 28% 22%,
+    34% 40%, 40% 15%, 46% 35%, 52% 10%, 58% 32%,
+    63% 20%, 69% 40%, 74% 28%, 80% 45%, 86% 32%,
+    92% 48%, 96% 38%, 100% 50%, 100% 100%
+  );
+}
+/* Front mountain ridge (lighter, closer) */
+.login-bg::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 32%;
+  background: linear-gradient(to top, #071828 60%, #0c2e50);
+  clip-path: polygon(
+    0% 100%, 0% 65%,
+    6% 50%, 12% 62%, 18% 42%, 25% 58%, 32% 38%,
+    39% 55%, 46% 36%, 53% 54%, 60% 40%, 67% 57%,
+    74% 44%, 81% 60%, 88% 46%, 94% 62%, 100% 52%, 100% 100%
+  );
+}
+
+.login-card {
+  background: rgba(220,240,252,.88) !important;
+  backdrop-filter: blur(22px) saturate(1.4) !important;
+  border: 1px solid rgba(255,255,255,.45) !important;
+  border-radius: 22px !important;
+  box-shadow: 0 28px 60px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.1) !important;
+  z-index: 10;
+  position: relative;
+  animation: fadeInUp .6s ease forwards;
+  padding: 2.5rem !important;
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-logo-text {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #0c2340, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.login-tagline {
+  color: rgba(255,255,255,.8);
+  font-size: .95rem;
+  letter-spacing: .05em;
+  text-align: center;
+  margin-top: -.5rem;
+  margin-bottom: 2rem;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HOME  —  Athlete menu cards
+   ═══════════════════════════════════════════════════════════ */
+.home-hero {
+  text-align: center;
+  padding: 2rem 0 2.5rem;
+}
+.home-hero h2 {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.5px;
+}
+.home-hero p { color: var(--muted); font-size: 1rem; }
+
+.menu-card {
+  border-radius: 18px !important;
+  border: none !important;
+  box-shadow: var(--shadow-md) !important;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .28s cubic-bezier(.34,1.56,.64,1), box-shadow .28s ease !important;
+  text-decoration: none !important;
+}
+.menu-card:hover {
+  transform: translateY(-8px) scale(1.02) !important;
+  box-shadow: 0 22px 45px rgba(14,165,233,.22) !important;
+}
+.menu-card .card-body { padding: 2rem 1.5rem !important; }
+
+.menu-icon {
+  font-size: 3.8rem;
+  line-height: 1;
+  margin-bottom: 1rem;
+  display: block;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,.12));
+  transition: transform .25s ease;
+}
+.menu-card:hover .menu-icon { transform: scale(1.12); }
+
+.card-gradient-blue  { background: linear-gradient(145deg, #e0eff8 60%, #b8d8ee) !important; }
+.card-gradient-sky   { background: linear-gradient(145deg, #deeef8 60%, #b8cff0) !important; }
+.card-gradient-pine  { background: linear-gradient(145deg, #daeef2 60%, #a8d8c0) !important; }
+.card-gradient-gold  { background: linear-gradient(145deg, #e8e8d8 60%, #e0d090) !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   MONITOR PAGE
+   ═══════════════════════════════════════════════════════════ */
+.monitor-panel {
+  background: linear-gradient(145deg, #0c1f3a, #0a3a60) !important;
+  border-radius: var(--r) !important;
+  border: 1px solid rgba(14,165,233,.25) !important;
+  box-shadow: 0 8px 30px rgba(14,165,233,.2) !important;
+  padding: 1.5rem !important;
+}
+.monitor-panel .form-label,
+.monitor-panel label { color: #bae6fd !important; }
+.monitor-panel .slider-label { color: #93c5fd !important; font-size: .85rem !important; }
+
+.timer-display {
+  background: linear-gradient(145deg, #0c1f3a, #071828) !important;
+  border: 2px solid rgba(14,165,233,.4) !important;
+  border-radius: var(--r) !important;
+  color: #38bdf8 !important;
+  font-family: 'Courier New', monospace !important;
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.ecg-wrapper {
+  background: #000 !important;
+  border-radius: var(--r) !important;
+  border: 1px solid rgba(0,255,0,.2) !important;
+  overflow: hidden;
+}
+
+/* ── Slider overrides ────────────────────────────────────── */
+.rc-slider-track          { background: var(--accent)      !important; }
+.rc-slider-handle         { border-color: var(--accent)    !important; background: #fff !important; }
+.rc-slider-handle:hover   { border-color: var(--accent-dark) !important; }
+.rc-slider-rail           { background: #d0e9f7 !important; }
+.rc-slider-dot-active     { border-color: var(--accent) !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   ONBOARDING — First-login profile tutorial
+   ═══════════════════════════════════════════════════════════ */
+
+/* Dark backdrop — pointer-events none lets the spotlit card receive clicks */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, .75);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 10vh;
+}
+
+/* Floating instruction card */
+.onboarding-tooltip {
+  pointer-events: auto;
+  background: #fff;
+  border-radius: 18px;
+  padding: 2rem 2.5rem;
+  text-align: center;
+  box-shadow: 0 28px 60px rgba(0,0,0,.45);
+  max-width: 360px;
+  width: 90%;
+  animation: fadeInUp .5s ease forwards;
+  border: 2px solid rgba(14,165,233,.35);
+  position: relative;
+}
+
+.onboarding-close {
+  position: absolute;
+  top: .6rem;
+  right: .75rem;
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: .25rem .5rem;
+  border-radius: 50%;
+  transition: background .18s, color .18s;
+}
+.onboarding-close:hover { background: #e8f0f5; color: var(--text); }
+
+/* Spotlit form card — sits above the overlay via z-index */
+.spotlight-active {
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 4px rgba(14,165,233,.9),
+    0 0 50px rgba(14,165,233,.45) !important;
+  animation: spotlight-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes spotlight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(14,165,233,.9), 0 0 40px rgba(14,165,233,.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(14,165,233,.7), 0 0 70px rgba(14,165,233,.55);
+  }
+}
+
+/* Animated downward arrow inside the tooltip */
+.onboarding-arrow {
+  font-size: 2.8rem;
+  color: var(--accent);
+  display: block;
+  line-height: 1;
+  margin: .4rem auto .6rem;
+  animation: bounce-arrow 1s ease-in-out infinite;
+}
+
+@keyframes bounce-arrow {
+  0%, 100% { transform: translateY(0);   }
+  50%       { transform: translateY(10px); }
+}
+
+/* ── Badge / ListGroup ranking ───────────────────────────── */
+.badge-display {
+  border-radius: var(--r-lg) !important;
+  background: linear-gradient(145deg, #d4e9f7, #b8d4e8) !important;
+  padding: 1.5rem !important;
+}

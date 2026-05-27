@@ -1,6 +1,15 @@
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
+BADGES = [
+    {"nombre": "Principiante", "metros": 0,     "icono": "🎿", "color": "secondary"},
+    {"nombre": "Iniciado",     "metros": 1000,  "icono": "⛷️", "color": "info"},
+    {"nombre": "Aficionado",   "metros": 5000,  "icono": "🏅", "color": "primary"},
+    {"nombre": "Competidor",   "metros": 15000, "icono": "🥈", "color": "warning"},
+    {"nombre": "Experto",      "metros": 30000, "icono": "🥇", "color": "danger"},
+    {"nombre": "Leyenda",      "metros": 75000, "icono": "🏆", "color": "dark"},
+]
+
 class db:
     PATH = "users.db"
 
@@ -8,16 +17,16 @@ class db:
     def init(cls):
         conn = sqlite3.connect(cls.PATH)
         c = conn.cursor()
-        
+
         c.execute("""CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user TEXT UNIQUE,
-                    pass TEXT, 
+                    pass TEXT,
                     role TEXT,
                     age INTEGER,
                     weight REAL,
                     height REAL)""")
-        
+
         # --- MODIFICADO: Añadimos 'altitud' al cuestionario diario ---
         c.execute("""CREATE TABLE IF NOT EXISTS quest (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +35,7 @@ class db:
                     rpe INTEGER,
                     sueno REAL,
                     altitud_pernocta INTEGER DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(user_id) REFERENCES users(id))""")
 
         # --- MODIFICADO: Unificamos en una sola tabla 'sesiones_nieve' ---
@@ -38,14 +47,48 @@ class db:
                         duration_sec INTEGER,
                         avg_hr INTEGER, max_hr INTEGER, min_hr INTEGER,
                         avg_spo2 INTEGER, min_spo2 INTEGER,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+                        metros_descenso INTEGER DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY(user_id) REFERENCES users(id))""")
-        
+
+        # Migración: añadir columna si ya existe la tabla sin ella
+        try:
+            c.execute("ALTER TABLE sesiones_nieve ADD COLUMN metros_descenso INTEGER DEFAULT 0")
+            conn.commit()
+        except: pass
+
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN first_login INTEGER DEFAULT 0")
+            conn.commit()
+        except: pass
+
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN notes TEXT DEFAULT ''")
+            conn.commit()
+        except: pass
+
         try:
             pwd = generate_password_hash("1234")
             c.execute("INSERT INTO users (user, pass, role) VALUES (?,?,?)", ("admin", pwd, "fisio"))
             conn.commit()
         except: pass
+        conn.close()
+
+    @classmethod
+    def is_first_login(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("SELECT first_login FROM users WHERE id=?", (user_id,))
+        row = c.fetchone()
+        conn.close()
+        return bool(row and row[0] == 1)
+
+    @classmethod
+    def mark_profile_complete(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("UPDATE users SET first_login=0 WHERE id=?", (user_id,))
+        conn.commit()
         conn.close()
 
     @classmethod
@@ -89,7 +132,7 @@ class db:
         c = conn.cursor()
         pwd = generate_password_hash(password)
         try:
-            c.execute("INSERT INTO users (user, pass, role) VALUES (?,?,?)", (user, pwd, role))
+            c.execute("INSERT INTO users (user, pass, role, first_login) VALUES (?,?,?,1)", (user, pwd, role))
             conn.commit()
             conn.close()
             return True
@@ -131,14 +174,14 @@ class db:
 
     # --- MODIFICADO: Guardar ejercicio en la nueva tabla ---
     @classmethod
-    def save_exercise(cls, user_id, ex_type, duration, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, altitud=0):
+    def save_exercise(cls, user_id, ex_type, duration, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, altitud=0, metros=0):
         conn = sqlite3.connect(cls.PATH)
         c = conn.cursor()
         try:
-            c.execute("""INSERT INTO sesiones_nieve 
-                      (user_id, modalidad, altitud_ejercicio, duration_sec, avg_hr, max_hr, min_hr, avg_spo2, min_spo2) 
-                      VALUES (?,?,?,?,?,?,?,?,?)""", 
-                      (user_id, ex_type, altitud, duration, avg_hr, max_hr, min_hr, avg_spo2, min_spo2))
+            c.execute("""INSERT INTO sesiones_nieve
+                      (user_id, modalidad, altitud_ejercicio, duration_sec, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, metros_descenso)
+                      VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                      (user_id, ex_type, altitud, duration, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, metros))
             conn.commit()
             conn.close()
             return True
@@ -146,6 +189,43 @@ class db:
             print(e)
             conn.close()
             return False
+
+    @classmethod
+    def get_total_metros(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("SELECT COALESCE(SUM(metros_descenso), 0) FROM sesiones_nieve WHERE user_id=?", (user_id,))
+        total = c.fetchone()[0]
+        conn.close()
+        return total
+
+    @classmethod
+    def get_ranking(cls):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT u.id, u.user, COALESCE(SUM(s.metros_descenso), 0) as total_metros
+            FROM users u
+            LEFT JOIN sesiones_nieve s ON u.id = s.user_id
+            WHERE u.role = 'paciente'
+            GROUP BY u.id, u.user
+            ORDER BY total_metros DESC
+        """)
+        rows = c.fetchall()
+        conn.close()
+        return [{"id": r[0], "name": r[1], "metros": r[2]} for r in rows]
+
+    @classmethod
+    def get_badge_info(cls, total_metros):
+        current = BADGES[0]
+        next_badge = None
+        for badge in BADGES:
+            if total_metros >= badge["metros"]:
+                current = badge
+            else:
+                next_badge = badge
+                break
+        return current, next_badge
 
     # --- MODIFICADO: Leer historial específico (ahora filtra por modalidad) ---
     @classmethod
@@ -195,6 +275,135 @@ class db:
                 })
         conn.close()
         return correlation_points
+
+    @classmethod
+    def get_heatmap_data(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT altitud_ejercicio, metros_descenso, max_hr, modalidad
+            FROM sesiones_nieve
+            WHERE user_id=?
+            ORDER BY created_at ASC
+        """, (user_id,))
+        rows = c.fetchall()
+        conn.close()
+        return [{"altitud": r[0], "metros": r[1], "max_hr": r[2], "modalidad": r[3]} for r in rows]
+
+    @classmethod
+    def get_acwr(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT COALESCE(SUM(metros_descenso), 0)
+            FROM sesiones_nieve
+            WHERE user_id=? AND date(created_at,'localtime') >= date('now','-7 days')
+        """, (user_id,))
+        acute = c.fetchone()[0] or 0
+        c.execute("""
+            SELECT COALESCE(SUM(metros_descenso), 0)
+            FROM sesiones_nieve
+            WHERE user_id=? AND date(created_at,'localtime') >= date('now','-28 days')
+        """, (user_id,))
+        chronic_total = c.fetchone()[0] or 0
+        conn.close()
+        chronic_weekly = chronic_total / 4
+        acwr = round(acute / chronic_weekly, 2) if chronic_weekly > 0 else None
+        return {"acwr": acwr, "acute": acute, "chronic_weekly": int(chronic_weekly)}
+
+    @classmethod
+    def get_weekly_summary(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT COALESCE(SUM(metros_descenso),0), COUNT(*)
+            FROM sesiones_nieve
+            WHERE user_id=? AND date(created_at,'localtime') >= date('now','-7 days')
+        """, (user_id,))
+        row = c.fetchone()
+        this_m, this_s = row[0] or 0, row[1] or 0
+        c.execute("""
+            SELECT COALESCE(SUM(metros_descenso),0), COUNT(*)
+            FROM sesiones_nieve
+            WHERE user_id=?
+              AND date(created_at,'localtime') >= date('now','-14 days')
+              AND date(created_at,'localtime') <  date('now','-7 days')
+        """, (user_id,))
+        row = c.fetchone()
+        prev_m, prev_s = row[0] or 0, row[1] or 0
+        conn.close()
+        return {"this_metros": this_m, "this_sessions": this_s,
+                "prev_metros": prev_m, "prev_sessions": prev_s}
+
+    @classmethod
+    def save_exercise_manual(cls, user_id, ex_type, duration, avg_hr, max_hr, min_hr,
+                             avg_spo2, min_spo2, altitud, metros, date_str):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        try:
+            c.execute("""INSERT INTO sesiones_nieve
+                      (user_id, modalidad, altitud_ejercicio, duration_sec, avg_hr, max_hr, min_hr,
+                       avg_spo2, min_spo2, metros_descenso, created_at)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                      (user_id, ex_type, altitud, duration, avg_hr, max_hr, min_hr,
+                       avg_spo2, min_spo2, metros, date_str))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(e)
+            conn.close()
+            return False
+
+    @classmethod
+    def get_activity_by_day(cls, user_id, days=90):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT date(created_at, 'localtime'), SUM(metros_descenso), MAX(max_hr), COUNT(*)
+            FROM sesiones_nieve
+            WHERE user_id=? AND date(created_at, 'localtime') >= date('now', ?)
+            GROUP BY date(created_at, 'localtime')
+            ORDER BY date(created_at, 'localtime') ASC
+        """, (user_id, f'-{days} days'))
+        data = c.fetchall()
+        conn.close()
+        return data
+
+    @classmethod
+    def get_monthly_metros(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT COALESCE(SUM(metros_descenso), 0), COUNT(*)
+            FROM sesiones_nieve
+            WHERE user_id=? AND date(created_at, 'localtime') >= date('now', 'start of month')
+        """, (user_id,))
+        row = c.fetchone()
+        conn.close()
+        return (row[0] or 0, row[1] or 0)
+
+    @classmethod
+    def save_athlete_note(cls, user_id, note):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        try:
+            c.execute("UPDATE users SET notes=? WHERE id=?", (note, user_id))
+            conn.commit()
+            conn.close()
+            return True
+        except:
+            conn.close()
+            return False
+
+    @classmethod
+    def get_athlete_note(cls, user_id):
+        conn = sqlite3.connect(cls.PATH)
+        c = conn.cursor()
+        c.execute("SELECT notes FROM users WHERE id=?", (user_id,))
+        row = c.fetchone()
+        conn.close()
+        return row[0] if row and row[0] else ""
 
     @classmethod
     def get_all_patients(cls):
