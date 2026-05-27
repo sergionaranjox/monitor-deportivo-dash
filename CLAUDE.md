@@ -1,10 +1,14 @@
 # CLAUDE.md — SnowTrack · Guía de contexto y normas
 
-## El contexto debe ser leido siempre que se quiera hacer un cambio para no perder el contexo ni las normas para realizar los cambios
+> **Leer siempre al inicio de cada sesión antes de tocar cualquier archivo.**
+
+---
 
 ## Qué es esta app
 
-**SnowTrack** es un monitor de rendimiento deportivo para esquiadores y snowboarders. Simula telemetría biomédica (ECG, FC, SpO₂) durante descensos en altitud, registra el historial del atleta y ofrece un panel al entrenador con análisis avanzado. Stack: **Python · Dash · Plotly · SQLite · Bootstrap (dbc)**.
+**SnowTrack** es un monitor de rendimiento deportivo para esquiadores y snowboarders. Simula telemetría biomédica (ECG, FC, SpO₂) durante descensos en altitud, registra el historial del atleta y ofrece un panel al entrenador con análisis avanzado.
+
+Stack: **Python · Dash · Plotly · SQLite · Bootstrap (dbc)**
 
 ---
 
@@ -17,47 +21,126 @@
 | `layouts.py` | Todas las vistas HTML (sin lógica). Funciones y variables globales de layout |
 | `logic_auth.py` | Callbacks de login, registro y logout |
 | `logic_nav.py` | Callback de routing (`render`) y redirección automática |
-| `logic_athlete.py` | Clase `athlete` — todos los callbacks del atleta (home, monitor reposo, historial, perfil, ranking) |
+| `logic_athlete.py` | Clase `athlete` — todos los callbacks del atleta |
 | `logic_simulation.py` | Clase `simulation` — ECG en tiempo real, timer, guardar sesión |
-| `logic_physio.py` | Clase `physio` — panel del entrenador, gráficas, mapa, descarga PDF/Excel |
-| `logic_pdf.py` | Generador de informes PDF individuales |
+| `logic_physio.py` | Clase `physio` — panel del entrenador, gráficas, mapa, notas, PDF/Excel |
+| `logic_pdf.py` | Generador de informes PDF individuales (para el fisio) |
 | `logic_export.py` | Generador de Excel global (todos los atletas) |
-| `physiological_model.py` | Modelo fisiológico: HR, SpO₂, ECG template (PhysioNet/sintético) |
+| `physiological_model.py` | Modelo fisiológico: HR ramp, SpO₂ por altitud, ECG template (PhysioNet/sintético) |
 | `assets/custom.css` | CSS global con variables CSS, tema mountain |
 
 ---
 
 ## Base de datos (SQLite — `users.db`)
 
-### Tablas
+### Tablas actuales
 
-**`users`**: `id, user, pass, role, age, weight, height, first_login`
+**`users`**: `id, user, pass, role, age, weight, height, first_login, notes`
 - `role`: `"paciente"` (atleta) | `"fisio"` (entrenador)
-- `first_login=1` → redirige al perfil con onboarding tutorial
+- `first_login=1` → redirige al perfil con onboarding tutorial al hacer login
+- `notes`: texto libre para anotaciones del entrenador sobre el atleta
 
 **`quest`**: `id, user_id, fatiga, rpe, sueno, altitud_pernocta, created_at`
-- Diario diario del atleta (fatiga 1-10, RPE 1-10, horas sueño, altitud donde durmió)
+- Diario diario del atleta (fatiga 1-10, RPE 1-10, horas sueño, altitud donde pernoctó)
 
 **`sesiones_nieve`**: `id, user_id, modalidad, altitud_ejercicio, duration_sec, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, metros_descenso, created_at`
-- `modalidad`: `"esqui"` | `"snowboard"` ← IMPORTANTE: nunca usar tipos antiguos ("run", "bike", "squat")
+- `modalidad`: **`"esqui"`** | **`"snowboard"`** — NUNCA usar tipos antiguos ("run", "bike", "squat")
 
-### Métodos clave de `db`
+### Todos los métodos de `db`
 
-- `get_history(user_id)` → `(date, fatiga, rpe, sueno, altitud_pernocta)` — últimas 5 entradas
-- `get_exercise_history(user_id)` → `(date, modalidad, duration_sec, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, altitud_ejercicio)` — todas las sesiones
-- `get_specific_history(user_id, ex_type)` → igual pero filtrado por modalidad
-- `get_last_health_status(user_id)` → `"ok"` | `"warning"` | `"danger"` | `None`
-- `get_total_metros(user_id)` → int total acumulado
-- `get_ranking()` → `[{id, name, metros}]` ordenado DESC
-- `get_badge_info(total)` → `(current_badge, next_badge)` donde badge = `{nombre, metros, icono, color}`
+| Método | Devuelve |
+|--------|----------|
+| `verify(user, password)` | `{id, role}` o `None` |
+| `register(user, password, role)` | `True/False` |
+| `get_user_info(user_id)` | `{name, age, weight, height}` |
+| `update_profile(user_id, age, weight, height)` | `True/False` |
+| `is_first_login(user_id)` | `bool` |
+| `mark_profile_complete(user_id)` | — |
+| `save_quest(user_id, fatiga, rpe, sueno, altitud)` | `True/False` |
+| `get_history(user_id)` | últimas 5 entradas del diario |
+| `get_chart_data(user_id)` | todas las entradas del diario (para gráficas) |
+| `save_exercise(user_id, ex_type, duration, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, altitud, metros)` | `True/False` — guarda sesión del monitor en directo |
+| `save_exercise_manual(user_id, ex_type, duration, avg_hr, max_hr, min_hr, avg_spo2, min_spo2, altitud, metros, date_str)` | `True/False` — guarda sesión con fecha personalizada |
+| `get_exercise_history(user_id)` | todas las sesiones, ORDER BY DESC |
+| `get_specific_history(user_id, ex_type)` | sesiones filtradas por modalidad |
+| `get_total_metros(user_id)` | `int` metros acumulados totales |
+| `get_ranking()` | `[{id, name, metros}]` ORDER BY DESC |
+| `get_badge_info(total_metros)` | `(current_badge, next_badge)` — badge = `{nombre, metros, icono, color}` |
+| `get_last_health_status(user_id)` | `"ok"` \| `"warning"` \| `"danger"` \| `None` |
+| `get_all_patients()` | `[{label, value}]` para el Dropdown del fisio |
+| `get_correlation_data(user_id)` | `[{date, fatiga, hr_max, type}]` — días con diario y sesión |
+| `get_heatmap_data(user_id)` | `[{altitud, metros, max_hr, modalidad}]` — para mapa geográfico |
+| `get_activity_by_day(user_id, days=90)` | `[(date, metros, max_hr, count)]` — agrupado por día |
+| `get_monthly_metros(user_id)` | `(metros, sessions_count)` del mes corriente |
+| `get_acwr(user_id)` | `{acwr, acute, chronic_weekly}` — ratio carga aguda:crónica |
+| `get_weekly_summary(user_id)` | `{this_metros, this_sessions, prev_metros, prev_sessions}` — ventanas de 7 días rodantes |
+| `save_athlete_note(user_id, note)` | `True/False` — guarda notas del entrenador |
+| `get_athlete_note(user_id)` | `str` — nota del entrenador |
 
-### Índices de columnas en consultas (para no equivocarse)
+### Índices de columnas en consultas (crítico — no equivocarse)
 
 `get_exercise_history`: 0=date, 1=modalidad, 2=duration_sec, 3=avg_hr, 4=max_hr, 5=min_hr, 6=avg_spo2, 7=min_spo2, 8=altitud_ejercicio
 
 `get_specific_history`: 0=date, 1=duration_sec, 2=avg_hr, 3=max_hr, 4=min_hr, 5=avg_spo2, 6=min_spo2, 7=altitud_ejercicio
 
-`get_history`: 0=date, 1=fatiga, 2=rpe, 3=sueno, 4=altitud_pernocta
+`get_history` / `get_chart_data`: 0=date, 1=fatiga, 2=rpe, 3=sueno, 4=altitud_pernocta
+
+---
+
+## Estado actual de cada página
+
+### `/app` — Home del atleta
+- **Hero** + `id="home-stats-row"` (4 tarjetas: última sesión, insignia+progreso, fatiga muscular, objetivo mensual `sm=6 lg=3`)
+- `id="home-acwr-section"` — tarjeta ACWR con barra 0-2.0, badge de estado, resumen semanal (metros + sesiones + comparativa semana anterior)
+- **Menú** — 4 tarjetas de navegación (monitor, historial, ranking, perfil)
+- Modal `id="modal-missing-profile"` si el usuario no tiene perfil completo
+
+### `/app/monitor` — Monitor biomédico
+- **Panel izquierdo**: radio de modalidad, slider altitud, `id="risk-calculator"` (semáforo pre-sesión: combina SpO₂ esperada + fatiga + sueño), timer, botón INICIAR/DETENER, `id="monitor-rest-info"` (resumen última sesión o instrucciones primera vez)
+- **Panel derecho**: `id="monitor-hr-kpi"` + `id="monitor-spo2-kpi"` (KPIs en tiempo real), ECG en tiempo real (`id="ecg-graph"`), stores: `is-running-store`, `locked-ex-store`, `session-biometrics-store`
+- Interval: `id="clock-interval"` cada 500ms
+
+### `/app/history` — Historial del atleta
+5 pestañas:
+1. **📝 Diario de Fatiga** — sliders fatiga/RPE, input sueño, slider altitud pernocta (0-3500m), gráfica evolución, tabla últimas 5 entradas
+2. **🏔️ Historial de Nieve** — tabs por modalidad (esquí/snowboard), gráfica dual-eje FC+SpO₂, `id="hr-zones-chart"` (barras apiladas Z1-Z5 últimas 10 sesiones)
+3. **🫁 Aclimatación** — SpO₂ mín por sesión vs altitud, línea umbral 90%
+4. **📅 Actividad** — heatmap calendario 90 días estilo GitHub
+5. **➕ Añadir Sesión** — formulario registro manual (fecha, modalidad, altitud, duración, metros, FC avg/max, SpO₂ avg/min)
+
+Store: `dcc.Store(id="manual-refresh-trigger")` — al guardar sesión manual, se incrementa y dispara refresco del historial.
+
+### `/app/profile` — Perfil del atleta
+- Formulario datos físicos (edad, peso, altura)
+- Límites de seguridad calculados (FC máx teórica, IMC)
+- Overlay de onboarding (`id="onboarding-overlay"`) si `first_login=1`
+
+### `/app/ranking` — Ranking global
+- Mi insignia actual + barra de progreso hacia la siguiente
+- Lista de todas las insignias (bloqueadas/desbloqueadas)
+- Tabla ranking global con medallas y metros
+
+### `/fisio` — Panel del entrenador
+Navbar propio (verde-teal) con botones PDF / Excel / Salir.
+Selector de atleta (Dropdown) a la izquierda. Panel principal con 5 pestañas:
+1. **👥 Vista General** — tabla todos los atletas: posición, nombre, semáforo, ACWR (badge colorizado), insignia, metros
+2. **📋 Diario y Fatiga** — gráfica fatiga+RPE, tabla últimas entradas
+3. **🏔️ Rendimiento en Pista** — gráfica FC Max+Media+SpO₂, tabla descensos por modalidad, **notas del entrenador** (textarea + guardar)
+4. **🔬 Data Science** — scatter fatiga vs FC Max por tipo de ejercicio
+5. **🗺️ Mapa de Actividad** — mapa geográfico de resorts con densidad de actividad
+
+---
+
+## `physiological_model.py` — Funciones clave
+
+| Función | Uso |
+|---------|-----|
+| `preload_template()` | Descarga/cachea plantilla ECG de PhysioNet al arrancar |
+| `calculate_session_params(ex_type, altitud, age)` | Precalcula parámetros biométricos al inicio de sesión |
+| `finalize_session_biometrics(params, altitud, duration_sec)` | Devuelve (avg_hr, max_hr, min_hr, avg_spo2, min_spo2) al finalizar |
+| `hr_at_elapsed(seconds, target_max_hr, hr_rest)` | HR instantánea con rampa exponencial (tau=90s) |
+| `generate_ecg_window(n_points, seconds_elapsed, hr, noise)` | Genera ventana de señal ECG para el gráfico |
+| `get_spo2_range(altitud)` | Devuelve `(spo2_lo, spo2_hi)` según tabla Severinghaus 1979 |
 
 ---
 
@@ -66,227 +149,121 @@
 ### Reglas críticas
 
 1. **Verificar siempre** con `python -c "import app; print('OK')"` tras cualquier cambio.
-2. **Nunca usar tipos de ejercicio antiguos** ("run", "bike", "squat") — la BD usa "esqui" y "snowboard".
-3. **`allow_duplicate=True`** es obligatorio cuando dos callbacks comparten el mismo Output.
-4. **Migraciones de BD**: usar siempre el patrón `try: ALTER TABLE ... except: pass` para añadir columnas.
+2. **Nunca usar tipos de ejercicio antiguos** ("run", "bike", "squat") — la BD usa `"esqui"` y `"snowboard"`.
+3. **`allow_duplicate=True`** es obligatorio cuando dos callbacks comparten el mismo `Output`.
+4. **Migraciones de BD**: siempre el patrón `try: ALTER TABLE ... except: pass` para añadir columnas.
 5. **No mezclar lógica en layouts**: `layouts.py` solo define HTML/estructura, nunca hace queries a BD.
+6. **`callback_context` debe importarse** explícitamente en cada archivo que lo use: `from dash import ..., callback_context`.
+7. **Outputs nuevos en callbacks existentes**: añadir al final de la lista de Outputs y actualizar TODOS los `return` del callback.
 
 ### Estilo de código
 
 - Sin comentarios obvios; solo cuando el WHY no es evidente.
 - Sin docstrings multilínea.
 - Callbacks siempre dentro de `start_callbacks()` de su clase correspondiente.
-- Outputs nuevos en callbacks existentes: añadir al final de la lista de Outputs para no romper orden.
-- Preferir `no_update` sobre devolver valores vacíos cuando el callback no aplica a la ruta actual.
+- Preferir `no_update` cuando el callback no aplica a la ruta actual (`pathname != "/app/..."`)
+- Rutas de callbacks: comprobar siempre `pathname` con `if pathname != "/app/X": return no_update`
 
 ### CSS / UI
 
-- Variables CSS disponibles: `--bg, --card, --snow, --muted, --text, --accent, --accent-dark, --pine-dark`
-- Tema: gradiente azul-acero en el body, tarjetas con fondo `var(--snow)`, navbar atleta azul oscuro, navbar fisio verde-teal.
-- Animaciones existentes: `page-enter` (fade-in), `spotlight-pulse` (glow azul), `bounce-arrow`, `fadeInUp`.
-- Bootstrap breakpoints usados: `width=12, sm=X, lg=Y` — siempre diseñar mobile-first.
+- Variables CSS: `--bg, --card, --snow, --muted, --text, --accent, --accent-dark, --pine-dark`
+- Tema: gradiente azul-acero en el body, tarjetas con fondo `var(--snow)`, navbar atleta azul oscuro (`snow-navbar`), navbar fisio verde-teal (`physio-navbar`)
+- Animaciones existentes: `page-enter` (fade-in), `spotlight-pulse` (glow azul), `bounce-arrow`, `fadeInUp`
+- Bootstrap breakpoints: `width=12, sm=X, lg=Y` — siempre mobile-first
 
 ### Seguridad
 
-- Contraseñas hasheadas con `werkzeug.security`.
-- Sesión en `dcc.Store(id="user_storage")` — client-side, no cifrado.
-- El logout limpia `user_storage` a `None`; el redirect callback lo manda al login.
+- Contraseñas hasheadas con `werkzeug.security`
+- Sesión en `dcc.Store(id="user_storage")` — client-side, no cifrado
+- El logout limpia `user_storage` a `None`; el redirect callback lo manda al login
+
+### ACWR — referencia rápida
+
+| Ratio | Estado | Color |
+|-------|--------|-------|
+| `None` | Sin datos (<28 días historial) | secondary |
+| < 0.8 | Carga baja / desentrenamiento | info |
+| 0.8 – 1.3 | **Zona óptima** | success |
+| 1.3 – 1.5 | Precaución | warning |
+| > 1.5 | Riesgo de lesión | danger |
+
+Fórmula: `ACWR = metros_últimos_7_días / (metros_últimos_28_días / 4)`
+
+### Zonas de FC — referencia rápida
+
+| Zona | % FC máx | Color |
+|------|----------|-------|
+| Z1 Recuperación | < 60% | `#94a3b8` gris |
+| Z2 Base aeróbica | 60-70% | `#22c55e` verde |
+| Z3 Aeróbico | 70-80% | `#a3e635` verde-lima |
+| Z4 Umbral | 80-90% | `#f59e0b` naranja |
+| Z5 Máximo | > 90% | `#ef4444` rojo |
+
+Estimación por sesión: distribución triangular con `min_hr` (mínimo), `avg_hr` (moda), `max_hr` (máximo).
 
 ---
 
 ## Historial de cambios
 
-### [Sesión 1] Oscurecer UI
+### [Sesión 1] Oscurecer UI + Onboarding tutorial
 
-**Problema**: La interfaz era demasiado blanca/pálida.
+**UI**: Gradiente del body a azul-acero, cards más oscuras, form controls con fondo `#daeef8`.
 
-**Cambios en `assets/custom.css`**:
-- Body: `linear-gradient(160deg, #6a9eba 0%, #8fbdd6 45%, #afd0e4 100%)`
-- Cards: `--card: #eaf3f9`, headers: `#bcd8ed`
-- Form controls: `background: #daeef8`, border `#90c0da`
-- Login card: `rgba(220,240,252,.88)`
+**Onboarding**: Columna `first_login` en `users`. Al registrarse → `first_login=1`. `logic_nav.py` redirige a `/app/profile`. Overlay `id="onboarding-overlay"` con tooltip flotante y botón ✕ `id="btn-dismiss-onboarding"`. Al guardar perfil o cerrar → `db.mark_profile_complete()` → `first_login=0`.
 
 ---
 
-### [Sesión 1] Onboarding tutorial primer login
+### [Sesión 2] Fixes críticos + gráficas
 
-**Problema**: Los atletas nuevos no completaban su perfil y el sistema no podía calcular límites.
+**Fix panel fisio**: `create_physio_table()` usaba tipos obsoletos ("run"/"bike"/"squat"). Cambiado a "esqui"/"snowboard".
 
-**Solución**:
+**Gráfica ejercicios atleta**: `exercises-chart` siempre devolvía figura vacía. Ahora usa `db.get_exercise_history()` con dual-eje (FC Max barras + SpO₂ Min línea).
 
-- `database.py`: Columna `first_login INTEGER DEFAULT 0` en `users`. Se pone a `1` al registrar, a `0` al completar perfil o cerrar tutorial.
-- `logic_nav.py`: `redirect()` detecta `first_login=1` y manda a `/app/profile`.
-- `layouts.py`: Overlay con `id="onboarding-overlay"` (fondo oscuro + tooltip flotante con botón ✕ `id="btn-dismiss-onboarding"`) y wrapper `id="profile-card-spotlight"` alrededor del formulario.
-- `logic_athlete.py`: Callback de perfil devuelve `overlay_style` y `spotlight_class`; callback separado `dismiss_onboarding` con `allow_duplicate=True` cierra el overlay y llama a `db.mark_profile_complete()`.
-- `assets/custom.css`: Clases `.onboarding-overlay`, `.onboarding-tooltip`, `.onboarding-close`, `.spotlight-active` (z-index 1000 sobre overlay 999), animación `spotlight-pulse`.
+**Gráfica fisio**: `fisio-ex-chart` es dual-eje: FC Max barras + FC Media línea (eje izq.) + SpO₂ Min % (eje der.).
 
 ---
 
-### [Sesión 2] Fix panel del fisio — tipos de ejercicio
+### [Sesión 3] Home dashboard + KPIs tiempo real
 
-**Problema crítico**: El panel del fisio mostraba "Sin datos" en las tabs de ejercicios porque usaba tipos obsoletos ("run", "bike", "squat") mientras la BD almacena "esqui"/"snowboard".
+**Home**: `id="home-stats-row"` con 3 tarjetas (→ ampliado a 4 en sesión 5): semáforo última sesión, insignia+progreso, fatiga muscular.
 
-**Cambios en `logic_physio.py`**:
-- `update_patient_view()`: sustituidas tabs `create_physio_table("run"/"bike"/"squat")` por `create_physio_table("esqui")` y `create_physio_table("snowboard")`.
-- Scatter de correlación: tipos actualizados a "esqui" (azul `#0ea5e9`) y "snowboard" (naranja `#f97316`).
+**KPIs monitor**: `id="monitor-hr-kpi"` + `id="monitor-spo2-kpi"` encima del ECG. Se actualizan cada 500ms con color según % del límite personal.
 
 ---
 
-### [Sesión 2] Gráfica de ejercicios del atleta (antes vacía)
+### [Sesión 4] Altitud de pernocta + Monitor en reposo + Vista General fisio
 
-**Problema**: `exercises-chart` en la pestaña "Historial de Nieve" siempre devolvía una figura vacía.
+**Altitud pernocta**: Slider `id="q-altitud"` en diario. Tabla del diario añade columna "Alt."
 
-**Cambios en `logic_athlete.py`** — `update_history_view()`:
-- Usa `db.get_exercise_history(user_id)` para construir gráfica dual-eje:
-  - Eje izquierdo: barras FC Max (`#fca5a5`)
-  - Eje derecho: línea SpO₂ Min % (`#0ea5e9`), rango forzado 80-100
+**Monitor en reposo**: `id="monitor-rest-info"` muestra resumen de última sesión o instrucciones primera vez.
 
----
-
-### [Sesión 2] Gráfica FC+SpO₂ en panel del fisio
-
-**Cambios en `logic_physio.py`** — `update_patient_view()`:
-- `fisio-ex-chart` ahora es dual-eje: barras FC Max + línea FC Media (eje izq.) + línea SpO₂ Min % (eje der.).
+**Vista General fisio**: Primera pestaña del panel con tabla de todos los atletas (ranking, semáforo, insignia, metros).
 
 ---
 
-### [Sesión 3] Home dashboard con estadísticas personales
+### [Sesión 5] 6 nuevas features
 
-**Problema**: El home solo mostraba 4 tarjetas de navegación sin datos del atleta.
+1. **Calculadora de riesgo pre-sesión** (`id="risk-calculator"`): score 0-10 combinando SpO₂ esperada + fatiga + sueño → alerta coloreada con recomendación. Se actualiza al mover el slider de altitud.
 
-**Cambios**:
-- `layouts.py`: `html.Div(id="home-stats-row")` entre el hero y el menú.
-- `logic_athlete.py`: Nuevo callback `update_home_stats()` — dispara en `pathname == "/app"` — devuelve 3 tarjetas:
-  1. **Semáforo de última sesión** (`db.get_last_health_status`) → verde/amarillo/rojo/gris
-  2. **Mi insignia actual** (`db.get_badge_info`) + barra de progreso hacia la siguiente
-  3. **Fatiga muscular** de la última entrada del diario (rojo si ≥8, naranja si ≥6)
+2. **Gráfica de aclimatación** (pestaña "🫁 Aclimatación"): SpO₂ mín por sesión + altitud (dual-eje) + línea umbral 90%.
 
----
+3. **Calendario de actividad** (pestaña "📅 Actividad"): `go.Heatmap` 7×N semanas, últimos 90 días, colorscale azul por metros.
 
-### [Sesión 3] KPIs en tiempo real en el monitor
+4. **Objetivo mensual** (4.ª tarjeta home): metros del mes + barra de progreso hacia 10.000m. `db.get_monthly_metros()` → `(metros, count)`.
 
-**Problema**: Durante una sesión solo se veía el ECG y el cronómetro; sin valores numéricos de FC ni SpO₂.
+5. **Registro manual** (pestaña "➕ Añadir Sesión"): formulario completo, `db.save_exercise_manual()` con `date_str` personalizado, `dcc.Store(id="manual-refresh-trigger")` para refresco automático del historial.
 
-**Cambios**:
-- `layouts.py`: `dbc.Row` con `id="monitor-hr-kpi"` y `id="monitor-spo2-kpi"` encima del ECG.
-- `logic_simulation.py`:
-  - Importa `get_spo2_range` de `physiological_model`.
-  - `update_display()` devuelve 4 valores: timer, figura ECG, HR KPI, SpO₂ KPI.
-  - HR: color verde/naranja/rojo según % del límite personal (`hr_max_limit` del store).
-  - SpO₂: estimada con `get_spo2_range(altitud)` decrementando hasta 3 puntos por penalización de ejercicio según tiempo transcurrido.
+6. **Notas del entrenador**: textarea en pestaña "Rendimiento en Pista" del fisio. `db.save_athlete_note()` / `db.get_athlete_note()`. Columna `notes TEXT` en tabla `users`.
 
 ---
 
-### [Sesión 4] Altitud de pernocta en el diario de fatiga
+### [Sesión 6] ACWR + Zonas de FC + Fix callback_context
 
-**Problema**: La BD tenía la columna `altitud_pernocta` pero no había UI para introducirla.
+**ACWR + Resumen Semanal**: `id="home-acwr-section"` en home. Tarjeta con valor ACWR colorizado, barra 0-2.0 (zona óptima 0.8-1.3), metros de la semana y comparativa vs semana anterior. Columna ACWR también en Vista General del fisio. `db.get_acwr()` y `db.get_weekly_summary()`.
 
-**Cambios**:
-- `layouts.py`: Slider `id="q-altitud"` (0-3500m, step 100) entre "Horas de Sueño" y el botón guardar.
-- `logic_athlete.py`: `update_history_view()` añade `State("q-altitud", "value")` y pasa el valor a `db.save_quest(..., altitud or 0)`. Tabla del diario añade columna "Alt." mostrando `altitud_pernocta`.
+**Zonas de FC**: `id="hr-zones-chart"` al pie del Historial de Nieve. Barras apiladas (Z1-Z5) para las últimas 10 sesiones. Función auxiliar `_tri_cdf()` implementa CDF de distribución triangular para estimar % tiempo en cada zona.
 
----
-
-### [Sesión 4] Monitor en reposo informativo
-
-**Problema**: Al entrar al monitor sin sesión activa, el panel izquierdo estaba casi vacío.
-
-**Cambios**:
-- `layouts.py`: `html.Div(id="monitor-rest-info")` debajo del botón INICIAR en el panel de control.
-- `logic_athlete.py`: Nuevo callback `update_monitor_rest()` — dispara en `pathname == "/app/monitor"` — muestra:
-  - Si sin historial: alerta "Primera sesión" con instrucciones.
-  - Si hay historial: resumen de última sesión (modalidad, altitud, duración, FC máx en rojo/verde, SpO₂ en rojo/azul) + límites de seguridad personales del atleta.
-
----
-
-### [Sesión 4] Vista General en panel del fisio
-
-**Problema**: El entrenador tenía que seleccionar atleta por atleta para ver su estado.
-
-**Cambios**:
-- `layouts.py`: Nueva primera pestaña `"👥 Vista General"` con `html.Div(id="fisio-overview")` en el panel del entrenador.
-- `logic_physio.py`: `load_list()` añade `Output("fisio-overview", "children")` — construye tabla con todos los atletas: posición ranking (🥇🥈🥉/#N), nombre, semáforo (🔴🟡🟢⚪), insignia actual, metros totales. Filas coloreadas en rojo/amarillo según estado de salud.
-
----
-
----
-
-### [Sesión 5] Calculadora de riesgo pre-sesión
-
-**Problema**: No había ningún indicador antes de iniciar una sesión que combinara fatiga, sueño y altitud.
-
-**Cambios**:
-- `layouts.py`: `html.Div(id="risk-calculator")` entre el slider de altitud y el timer en el monitor.
-- `logic_athlete.py`: Nuevo callback `update_risk_calculator()` — se dispara en `pathname == "/app/monitor"` y en cambios de `altitud-slider`. Calcula un `score` (0-10) sumando penalizaciones por SpO₂ esperada (<88%: +4, <92%: +2), fatiga (≥8: +3, ≥6: +2) y sueño (<4h: +3, <6h: +2). Muestra alerta coloreada (danger/warning/info/success) con nivel, factores y recomendación.
-- Importa `get_spo2_range` de `physiological_model`.
-
----
-
-### [Sesión 5] Gráfica de aclimatación
-
-**Cambios**:
-- `layouts.py`: Nueva pestaña `"🫁 Aclimatación"` en Historial con `dcc.Graph(id="aclimatacion-chart")`.
-- `logic_athlete.py`: Nuevo callback `update_aclimatacion()` — gráfica dual-eje: SpO₂ mín (línea azul + fill, puntos coloreados verde/naranja/rojo según valor) + Altitud de ejercicio (línea gris punteada). Línea horizontal roja a 90% como umbral de hipoxia.
-
----
-
-### [Sesión 5] Calendario de actividad tipo heatmap
-
-**Cambios**:
-- `layouts.py`: Nueva pestaña `"📅 Actividad"` en Historial con `dcc.Graph(id="activity-calendar")`.
-- `logic_athlete.py`: Nuevo callback `update_activity_calendar()` — construye grid 7×N semanas (últimos 90 días), usa `go.Heatmap` con colorscale azul (blanco=0, azul intenso=máximo metros). Eje Y = días de la semana (Lun-Dom), eje X = semanas.
-- `database.py`: Nuevo método `get_activity_by_day(user_id, days=90)` — agrupa por fecha: metros, max_hr, nº sesiones.
-
----
-
-### [Sesión 5] Objetivo mensual de metros en el home
-
-**Cambios**:
-- `logic_athlete.py`: `update_home_stats()` ahora devuelve 4 tarjetas (antes 3). Nueva tarjeta "🎯 Objetivo Mensual" muestra metros del mes actual + barra de progreso hacia meta de 10.000m. Layout cambia a `sm=6, lg=3`.
-- `database.py`: Nuevo método `get_monthly_metros(user_id)` → `(metros, sessions_count)` del mes corriente.
-
----
-
-### [Sesión 5] Registro manual de sesión pasada
-
-**Cambios**:
-- `layouts.py`: Nueva pestaña `"➕ Añadir Sesión"` en Historial con formulario: fecha, modalidad, altitud, duración (min), metros, FC avg/max, SpO₂ avg/min. Instrucciones en columna lateral. `dcc.Store(id="manual-refresh-trigger", data=0)` en la página.
-- `logic_athlete.py`: Nuevo callback `save_manual_session()` — valida campos, calcula `min_hr = avg_hr - 15`, guarda con `db.save_exercise_manual()`, actualiza `manual-refresh-trigger` para forzar recarga de tablas.
-- `update_history_view()` añade `Input("manual-refresh-trigger", "data")` para refrescar automáticamente al guardar.
-- `database.py`: Nuevo método `save_exercise_manual(...)` — igual que `save_exercise` pero acepta `date_str` para `created_at`.
-
----
-
-### [Sesión 5] Notas del entrenador por atleta
-
-**Cambios**:
-- `layouts.py`: En la pestaña "🏔️ Rendimiento en Pista" del panel del fisio, bajo la tabla de descensos: `dbc.Textarea(id="physio-note-input")`, `dbc.Button(id="btn-save-physio-note")`, `html.Div(id="physio-note-msg")`.
-- `logic_physio.py`: Nuevo callback `manage_physio_notes()` — al cambiar de atleta carga su nota (`db.get_athlete_note()`); al guardar la persiste (`db.save_athlete_note()`).
-- `database.py`: Nuevos métodos `save_athlete_note(user_id, note)` y `get_athlete_note(user_id)`. Migración `ALTER TABLE users ADD COLUMN notes TEXT DEFAULT ''`.
-
----
-
----
-
-### [Sesión 6] ACWR y Resumen Semanal
-
-**Problema**: No había ningún indicador de carga de entrenamiento acumulada; el atleta no sabía si estaba sobreentrenando o infraentrenando.
-
-**Cambios**:
-- `database.py`: Nuevo método `get_acwr(user_id)` → `{acwr, acute, chronic_weekly}`. ACWR = metros últimos 7 días / (metros últimos 28 días / 4). Nuevo método `get_weekly_summary(user_id)` → `{this_metros, this_sessions, prev_metros, prev_sessions}` usando ventanas de 7 días rodantes.
-- `layouts.py`: `html.Div(id="home-acwr-section")` entre las 4 tarjetas y el menú de navegación en el home.
-- `logic_athlete.py`: Nuevo callback `update_home_acwr()` — dispara en `pathname == "/app"`. Construye una tarjeta con: valor ACWR (colorizado danger/warning/success/info), badge de etiqueta, barra de progreso 0-2.0 con zona óptima 0.8-1.3 indicada, resumen semanal (metros + sesiones + comparativa vs semana anterior).
-- `logic_physio.py`: `load_list()` añade columna "ACWR" en la Vista General del fisio, con `db.get_acwr()` por atleta y badge colorizado.
-
----
-
-### [Sesión 6] Zonas de Frecuencia Cardíaca
-
-**Problema**: No había análisis de intensidad de entrenamiento; saber que la FC máx fue 175 bpm no indica si el atleta pasó más tiempo en zona aeróbica o anaeróbica.
-
-**Cambios**:
-- `layouts.py`: `dcc.Graph(id="hr-zones-chart")` al pie de la pestaña "🏔️ Historial de Nieve".
-- `logic_athlete.py`: `update_history_view()` añade 6.º output `hr-zones-chart`. Función auxiliar `_tri_cdf()` implementa la CDF de distribución triangular para estimar % tiempo en cada zona usando `min_hr`, `avg_hr`, `max_hr`. Zonas: Z1 (<60% FCmax), Z2 (60-70%), Z3 (70-80%), Z4 (80-90%), Z5 (>90%). Gráfico de barras apiladas para las últimas 10 sesiones, colores: gris/verde/verde-lima/naranja/rojo.
+**Fix**: `callback_context` no estaba importado en `logic_physio.py` → `NameError` al entrar al panel del fisio. Corregido añadiéndolo al import de `dash`.
 
 ---
 
